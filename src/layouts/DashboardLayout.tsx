@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout, Menu, Avatar, Dropdown, Tag, Typography, Button } from 'antd';
 import {
   DashboardOutlined,
@@ -24,14 +24,48 @@ import type { MenuProps } from 'antd';
 const { Sider, Header, Content } = Layout;
 const { Text } = Typography;
 
+const MOBILE_BREAKPOINT = 768;
+
 /**
- * Main dashboard layout with responsive sidebar, header, and content area.
+ * Main dashboard layout with responsive sidebar.
+ * On screens ≤ 768px the sidebar becomes a drawer overlay that slides in/out.
  */
 export default function DashboardLayout() {
   const [collapsed, setCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { username, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Detect mobile breakpoint
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
+      setIsMobile(mobile);
+      if (mobile) {
+        setCollapsed(false); // Reset collapse state — on mobile we use mobileOpen instead
+        setMobileOpen(false);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // Close drawer on route change (mobile)
+  useEffect(() => {
+    if (isMobile) setMobileOpen(false);
+  }, [location.pathname, isMobile]);
+
+  const toggleSidebar = () => {
+    if (isMobile) {
+      setMobileOpen((prev) => !prev);
+    } else {
+      setCollapsed((prev) => !prev);
+    }
+  };
 
   // Build menu items based on role
   const menuItems: MenuProps['items'] = [
@@ -137,22 +171,35 @@ export default function DashboardLayout() {
   // Find the current selected key based on path
   const selectedKey = '/' + location.pathname.split('/').filter(Boolean)[0] || '/dashboard';
 
+  // Sidebar width calculations
+  const siderWidth = 260;
+  const siderCollapsedWidth = 80;
+  const currentSiderWidth = isMobile ? 0 : collapsed ? siderCollapsedWidth : siderWidth;
+
   return (
     <Layout style={{ minHeight: '100vh' }}>
+      {/* Mobile overlay backdrop */}
+      {isMobile && (
+        <div
+          className={`sidebar-overlay${mobileOpen ? ' visible' : ''}`}
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
       <Sider
-        className="dashboard-sider"
-        collapsible
-        collapsed={collapsed}
+        className={`dashboard-sider${isMobile && mobileOpen ? ' mobile-open' : ''}`}
+        collapsible={!isMobile}
+        collapsed={isMobile ? false : collapsed}
         onCollapse={setCollapsed}
         trigger={null}
-        width={260}
-        collapsedWidth={80}
+        width={siderWidth}
+        collapsedWidth={siderCollapsedWidth}
         theme="dark"
       >
         {/* Logo */}
         <div className="sidebar-logo">
           <div className="logo-icon">SD</div>
-          {!collapsed && <span className="logo-text">Sanitary Direct</span>}
+          {(isMobile || !collapsed) && <span className="logo-text">Sanitary Direct</span>}
         </div>
 
         {/* Navigation Menu */}
@@ -166,14 +213,21 @@ export default function DashboardLayout() {
         />
       </Sider>
 
-      <Layout style={{ marginLeft: collapsed ? 80 : 260, transition: 'margin-left 0.2s' }}>
+      <Layout
+        className="dashboard-main-layout"
+        style={{ marginLeft: currentSiderWidth, transition: 'margin-left 0.2s' }}
+      >
         {/* Header */}
         <Header className="dashboard-header">
           <div className="header-left">
             <Button
               type="text"
-              icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-              onClick={() => setCollapsed(!collapsed)}
+              icon={
+                isMobile
+                  ? mobileOpen ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />
+                  : collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />
+              }
+              onClick={toggleSidebar}
               style={{ fontSize: 18 }}
             />
           </div>

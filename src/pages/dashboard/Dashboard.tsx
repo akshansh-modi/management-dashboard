@@ -1,11 +1,10 @@
-import { Row, Col, Statistic, Tag, Typography } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import { Row, Col, Statistic, Tag, Typography, Spin, Alert, Empty } from 'antd';
 import {
   DollarOutlined,
   ShoppingCartOutlined,
   ShoppingOutlined,
   TeamOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
   ClockCircleOutlined,
 } from '@ant-design/icons';
 import {
@@ -23,6 +22,8 @@ import {
 } from 'chart.js';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import { useAuth } from '../../context/AuthContext';
+import { analyticsService } from '../../services/analyticsService';
+import type { AnalyticsSummary } from '../../types';
 
 const { Title, Text } = Typography;
 
@@ -32,70 +33,23 @@ ChartJS.register(
   BarElement, ArcElement, ChartTitle, Tooltip, Legend, Filler
 );
 
-// ─── Mock Data (will be replaced by API calls in Phase 4) ────────────
+// ─── Static chart styling (data is injected from the API) ─────────────
 
-const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
-
-const revenueData = {
-  labels: months,
-  datasets: [
-    {
-      label: 'Revenue (₹)',
-      data: [185000, 220000, 195000, 310000, 275000, 340000],
-      borderColor: '#2F54EB',
-      backgroundColor: 'rgba(47, 84, 235, 0.08)',
-      tension: 0.4,
-      fill: true,
-      pointBackgroundColor: '#2F54EB',
-      pointBorderColor: '#FFFFFF',
-      pointBorderWidth: 2,
-      pointRadius: 5,
-    },
-  ],
+const STATUS_COLORS: Record<string, string> = {
+  PENDING: '#FAAD14',
+  CONFIRMED: '#2F54EB',
+  PROCESSING: '#13C2C2',
+  SHIPPED: '#722ED1',
+  DELIVERED: '#52C41A',
+  CANCELLED: '#FF4D4F',
 };
 
-const orderStatusData = {
-  labels: ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'],
-  datasets: [
-    {
-      data: [12, 8, 15, 42, 3],
-      backgroundColor: ['#FAAD14', '#2F54EB', '#722ED1', '#52C41A', '#FF4D4F'],
-      borderWidth: 0,
-      hoverOffset: 6,
-    },
-  ],
-};
-
-const topProductsData = {
-  labels: ['CRI Dhoom Pump', 'Sumolex CPVC Pipe', 'Finolex PVC Pipe', 'Supreme CPVC Fittings', 'Astral Column Pipe'],
-  datasets: [
-    {
-      label: 'Units Sold',
-      data: [156, 134, 118, 96, 72],
-      backgroundColor: [
-        'rgba(47, 84, 235, 0.85)',
-        'rgba(47, 84, 235, 0.7)',
-        'rgba(47, 84, 235, 0.55)',
-        'rgba(47, 84, 235, 0.4)',
-        'rgba(47, 84, 235, 0.25)',
-      ],
-      borderRadius: 6,
-      borderSkipped: false,
-    },
-  ],
-};
-
-const chartOptions = {
+const lineOptions = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-  },
+  plugins: { legend: { display: false } },
   scales: {
-    x: {
-      grid: { display: false },
-      ticks: { color: '#9CA3AF', font: { size: 12 } },
-    },
+    x: { grid: { display: false }, ticks: { color: '#9CA3AF', font: { size: 12 } } },
     y: {
       grid: { color: '#F0F0F0' },
       ticks: {
@@ -107,22 +61,14 @@ const chartOptions = {
   },
 };
 
-const barChartOptions = {
+const barOptions = {
   responsive: true,
   maintainAspectRatio: false,
   indexAxis: 'y' as const,
-  plugins: {
-    legend: { display: false },
-  },
+  plugins: { legend: { display: false } },
   scales: {
-    x: {
-      grid: { color: '#F0F0F0' },
-      ticks: { color: '#9CA3AF', font: { size: 12 } },
-    },
-    y: {
-      grid: { display: false },
-      ticks: { color: '#374151', font: { size: 12 } },
-    },
+    x: { grid: { color: '#F0F0F0' }, ticks: { color: '#9CA3AF', font: { size: 12 } } },
+    y: { grid: { display: false }, ticks: { color: '#374151', font: { size: 12 } } },
   },
 };
 
@@ -144,197 +90,243 @@ const doughnutOptions = {
   },
 };
 
+const formatINR = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
+
 // ─── Component ───────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const { isAdmin } = useAuth();
+  const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const kpiCards = [
-    {
-      title: isAdmin ? 'Total Revenue' : 'My Revenue',
-      value: 1525000,
-      prefix: '₹',
-      icon: <DollarOutlined />,
-      color: '#2F54EB',
-      bgColor: '#EBF0FF',
-      trend: 12.5,
-      trendUp: true,
-    },
-    {
-      title: isAdmin ? 'Total Orders' : 'My Orders',
-      value: 80,
-      prefix: undefined,
-      icon: <ShoppingCartOutlined />,
-      color: '#722ED1',
-      bgColor: '#F5EDFF',
-      trend: 8.2,
-      trendUp: true,
-    },
-    {
-      title: isAdmin ? 'Active Products' : 'My Products',
-      value: 247,
-      prefix: undefined,
-      icon: <ShoppingOutlined />,
-      color: '#52C41A',
-      bgColor: '#EDFFF0',
-      trend: 3.1,
-      trendUp: true,
-    },
-    ...(isAdmin
-      ? [
-          {
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    analyticsService
+      .getSummary(isAdmin)
+      .then((data) => {
+        if (!cancelled) setSummary(data);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(
+            e?.response?.data?.message ||
+              e?.message ||
+              'Failed to load analytics. Is the backend running?'
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin]);
+
+  const kpiCards = useMemo(() => {
+    const k = summary?.kpis;
+    const cards = [
+      {
+        title: isAdmin ? 'Total Revenue' : 'My Revenue',
+        value: k ? formatINR(k.totalRevenue) : '—',
+        icon: <DollarOutlined />,
+        color: '#2F54EB',
+        bgColor: '#EBF0FF',
+      },
+      {
+        title: isAdmin ? 'Total Orders' : 'My Orders',
+        value: k ? k.totalOrders.toLocaleString('en-IN') : '—',
+        icon: <ShoppingCartOutlined />,
+        color: '#722ED1',
+        bgColor: '#F5EDFF',
+      },
+      {
+        title: isAdmin ? 'Active Products' : 'My Products',
+        value: k ? k.activeProducts.toLocaleString('en-IN') : '—',
+        icon: <ShoppingOutlined />,
+        color: '#52C41A',
+        bgColor: '#EDFFF0',
+      },
+      isAdmin
+        ? {
             title: 'Active Sellers',
-            value: 14,
-            prefix: undefined,
+            value: k?.activeSellers != null ? k.activeSellers.toLocaleString('en-IN') : '—',
             icon: <TeamOutlined />,
             color: '#FAAD14',
             bgColor: '#FFF8E6',
-            trend: 2,
-            trendUp: true,
-          },
-        ]
-      : [
-          {
+          }
+        : {
             title: 'Pending Payments',
-            value: 3,
-            prefix: undefined,
+            value: k ? k.pendingPayments.toLocaleString('en-IN') : '—',
             icon: <ClockCircleOutlined />,
             color: '#FAAD14',
             bgColor: '#FFF8E6',
-            trend: 1,
-            trendUp: false,
           },
-        ]),
-  ];
+    ];
+    return cards;
+  }, [summary, isAdmin]);
+
+  const revenueData = useMemo(() => {
+    const series = summary?.revenueByMonth ?? [];
+    return {
+      labels: series.map((p) => p.label),
+      datasets: [
+        {
+          label: 'Revenue (₹)',
+          data: series.map((p) => p.value),
+          borderColor: '#2F54EB',
+          backgroundColor: 'rgba(47, 84, 235, 0.08)',
+          tension: 0.4,
+          fill: true,
+          pointBackgroundColor: '#2F54EB',
+          pointBorderColor: '#FFFFFF',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+        },
+      ],
+    };
+  }, [summary]);
+
+  const orderStatusData = useMemo(() => {
+    const series = (summary?.ordersByStatus ?? []).filter((s) => s.count > 0);
+    return {
+      labels: series.map((s) => s.status.charAt(0) + s.status.slice(1).toLowerCase()),
+      datasets: [
+        {
+          data: series.map((s) => s.count),
+          backgroundColor: series.map((s) => STATUS_COLORS[s.status] ?? '#8C8C8C'),
+          borderWidth: 0,
+          hoverOffset: 6,
+        },
+      ],
+    };
+  }, [summary]);
+
+  const topProductsData = useMemo(() => {
+    const series = summary?.topProducts ?? [];
+    return {
+      labels: series.map((p) => p.productName ?? p.productId),
+      datasets: [
+        {
+          label: 'Units Sold',
+          data: series.map((p) => p.quantitySold),
+          backgroundColor: [
+            'rgba(47, 84, 235, 0.85)',
+            'rgba(47, 84, 235, 0.7)',
+            'rgba(47, 84, 235, 0.55)',
+            'rgba(47, 84, 235, 0.4)',
+            'rgba(47, 84, 235, 0.25)',
+          ],
+          borderRadius: 6,
+          borderSkipped: false,
+        },
+      ],
+    };
+  }, [summary]);
+
+  const hasRevenue = (summary?.revenueByMonth ?? []).some((p) => p.value > 0);
+  const hasStatus = (summary?.ordersByStatus ?? []).some((s) => s.count > 0);
+  const hasTopProducts = (summary?.topProducts ?? []).length > 0;
 
   return (
     <div className="animate-fade-in">
-      {/* Page Header */}
       <div className="page-header">
         <Title level={3} style={{ marginBottom: 4 }}>
           {isAdmin ? 'Admin Dashboard' : 'Seller Dashboard'}
         </Title>
         <Text type="secondary">
-          {isAdmin
-            ? 'Platform overview and key metrics'
-            : 'Your business performance at a glance'}
+          {isAdmin ? 'Platform overview and key metrics' : 'Your business performance at a glance'}
         </Text>
       </div>
 
-      {/* KPI Cards */}
-      <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
-        {kpiCards.map((kpi, index) => (
-          <Col xs={24} sm={12} lg={6} key={kpi.title}>
-            <div className={`kpi-card animate-fade-in-delay-${index + 1}`}>
-              <div className="kpi-icon" style={{ background: kpi.bgColor, color: kpi.color }}>
-                {kpi.icon}
+      {error && (
+        <Alert
+          type="error"
+          showIcon
+          message="Couldn't load analytics"
+          description={error}
+          style={{ marginBottom: 20 }}
+        />
+      )}
+
+      <Spin spinning={loading} tip="Loading analytics…">
+        {/* KPI Cards */}
+        <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
+          {kpiCards.map((kpi, index) => (
+            <Col xs={24} sm={12} lg={6} key={kpi.title}>
+              <div className={`kpi-card animate-fade-in-delay-${index + 1}`}>
+                <div className="kpi-icon" style={{ background: kpi.bgColor, color: kpi.color }}>
+                  {kpi.icon}
+                </div>
+                <Statistic
+                  title={
+                    <Text type="secondary" style={{ fontSize: 13 }}>
+                      {kpi.title}
+                    </Text>
+                  }
+                  value={kpi.value}
+                  valueStyle={{ fontWeight: 700, fontSize: 28, color: '#1A1A2E' }}
+                />
               </div>
-              <Statistic
-                title={
-                  <Text type="secondary" style={{ fontSize: 13 }}>
-                    {kpi.title}
-                  </Text>
-                }
-                value={kpi.value}
-                prefix={kpi.prefix}
-                valueStyle={{ fontWeight: 700, fontSize: 28, color: '#1A1A2E' }}
-                formatter={(value) =>
-                  typeof value === 'number'
-                    ? value.toLocaleString('en-IN')
-                    : value
-                }
-              />
-              <div className={`kpi-trend ${kpi.trendUp ? 'up' : 'down'}`}>
-                {kpi.trendUp ? <ArrowUpOutlined /> : <ArrowDownOutlined />}
-                {kpi.trend}% vs last month
+            </Col>
+          ))}
+        </Row>
+
+        {/* Charts Row */}
+        <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
+          <Col xs={24} lg={16}>
+            <div className="chart-card">
+              <div className="chart-header">
+                <Title level={5} style={{ margin: 0 }}>Revenue Overview</Title>
+                <Tag color="blue">Last 6 Months</Tag>
+              </div>
+              <div style={{ height: 320 }}>
+                {hasRevenue ? (
+                  <Line data={revenueData} options={lineOptions as Parameters<typeof Line>[0]['options']} />
+                ) : (
+                  <Empty description="No revenue in this period" style={{ paddingTop: 90 }} />
+                )}
               </div>
             </div>
           </Col>
-        ))}
-      </Row>
+          <Col xs={24} lg={8}>
+            <div className="chart-card">
+              <div className="chart-header">
+                <Title level={5} style={{ margin: 0 }}>Orders by Status</Title>
+              </div>
+              <div style={{ height: 320 }}>
+                {hasStatus ? (
+                  <Doughnut data={orderStatusData} options={doughnutOptions} />
+                ) : (
+                  <Empty description="No orders yet" style={{ paddingTop: 90 }} />
+                )}
+              </div>
+            </div>
+          </Col>
+        </Row>
 
-      {/* Charts Row */}
-      <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
-        <Col xs={24} lg={16}>
-          <div className="chart-card">
-            <div className="chart-header">
-              <Title level={5} style={{ margin: 0 }}>Revenue Overview</Title>
-              <Tag color="blue">Last 6 Months</Tag>
+        {/* Top Products */}
+        <Row gutter={[20, 20]}>
+          <Col xs={24}>
+            <div className="chart-card">
+              <div className="chart-header">
+                <Title level={5} style={{ margin: 0 }}>Top Selling Products</Title>
+                <Tag color="green">By units sold</Tag>
+              </div>
+              <div style={{ height: 300 }}>
+                {hasTopProducts ? (
+                  <Bar data={topProductsData} options={barOptions} />
+                ) : (
+                  <Empty description="No sales data yet" style={{ paddingTop: 80 }} />
+                )}
+              </div>
             </div>
-            <div style={{ height: 320 }}>
-              <Line data={revenueData} options={chartOptions as Parameters<typeof Line>[0]['options']} />
-            </div>
-          </div>
-        </Col>
-        <Col xs={24} lg={8}>
-          <div className="chart-card">
-            <div className="chart-header">
-              <Title level={5} style={{ margin: 0 }}>Orders by Status</Title>
-            </div>
-            <div style={{ height: 320 }}>
-              <Doughnut data={orderStatusData} options={doughnutOptions} />
-            </div>
-          </div>
-        </Col>
-      </Row>
-
-      {/* Top Products */}
-      <Row gutter={[20, 20]}>
-        <Col xs={24} lg={12}>
-          <div className="chart-card">
-            <div className="chart-header">
-              <Title level={5} style={{ margin: 0 }}>Top Selling Products</Title>
-              <Tag color="green">This Month</Tag>
-            </div>
-            <div style={{ height: 280 }}>
-              <Bar data={topProductsData} options={barChartOptions} />
-            </div>
-          </div>
-        </Col>
-        <Col xs={24} lg={12}>
-          <div className="chart-card">
-            <div className="chart-header">
-              <Title level={5} style={{ margin: 0 }}>Recent Activity</Title>
-            </div>
-            <div style={{ padding: '12px 0' }}>
-              {[
-                { text: 'New order #ORD-X8K2M9', time: '5 min ago', color: '#2F54EB' },
-                { text: 'Payment verified for #ORD-R4T7J2', time: '1 hour ago', color: '#52C41A' },
-                { text: 'Product "CRI Dhoom 1HP" stock updated', time: '2 hours ago', color: '#722ED1' },
-                { text: 'New seller registered: Raj Enterprises', time: '4 hours ago', color: '#FAAD14' },
-                { text: 'Order #ORD-P3N5Q8 shipped via PORTER', time: '6 hours ago', color: '#13C2C2' },
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '12px 0',
-                    borderBottom: i < 4 ? '1px solid #F5F5F5' : 'none',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: item.color,
-                      flexShrink: 0,
-                    }}
-                  />
-                  <div style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 13 }}>{item.text}</Text>
-                  </div>
-                  <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-                    {item.time}
-                  </Text>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Col>
-      </Row>
+          </Col>
+        </Row>
+      </Spin>
     </div>
   );
 }

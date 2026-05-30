@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Form, Input, Button, Typography, Alert, Spin } from 'antd';
-import { LockOutlined, PhoneOutlined, KeyOutlined, UserOutlined } from '@ant-design/icons';
+import { LockOutlined, UserOutlined, KeyOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
@@ -43,10 +43,10 @@ export default function Login() {
 
   const handleInitiate = async () => {
     try {
-      const values = await form.validateFields(['mobileNumber']);
+      const values = await form.validateFields(['username']);
       setLoading(true);
       setError(null);
-      await authService.initiate({ mobileNumber: values.mobileNumber });
+      await authService.initiate(values.username);
       setOtpSent(true);
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { message?: string } } };
@@ -62,12 +62,11 @@ export default function Login() {
       setLoading(true);
       setError(null);
 
-      const response = await authService.authenticate({
-        username: values.username,
-        mobileNumber: values.mobileNumber,
-        password: values.password,
-        otp: values.otp
-      });
+      const response = await authService.authenticate(
+        values.username,
+        values.password,
+        values.otp
+      );
 
       login(response.accessToken, response.refreshToken);
       // The useEffect above will handle redirect after state updates
@@ -119,36 +118,20 @@ export default function Login() {
               size="large"
               onFinish={isOtpMode && !otpSent ? handleInitiate : handleLogin}
             >
-              {isOtpMode ? (
-                <Form.Item
-                  name="mobileNumber"
-                  label="Mobile Number"
-                  rules={[
-                    { required: true, message: 'Please enter your mobile number' },
-                  ]}
-                >
-                  <Input
-                    prefix={<PhoneOutlined style={{ color: '#9CA3AF' }} />}
-                    placeholder="Enter registered mobile number"
-                    disabled={otpSent}
-                    style={{ borderRadius: 8 }}
-                  />
-                </Form.Item>
-              ) : (
-                <Form.Item
-                  name="username"
-                  label="Username"
-                  rules={[
-                    { required: true, message: 'Please enter your username' },
-                  ]}
-                >
-                  <Input
-                    prefix={<UserOutlined style={{ color: '#9CA3AF' }} />}
-                    placeholder="Enter your username"
-                    style={{ borderRadius: 8 }}
-                  />
-                </Form.Item>
-              )}
+              <Form.Item
+                name="username"
+                label="Username"
+                rules={[
+                  { required: true, message: 'Please enter your username' },
+                ]}
+              >
+                <Input
+                  prefix={<UserOutlined style={{ color: '#9CA3AF' }} />}
+                  placeholder="Enter your username"
+                  disabled={otpSent}
+                  style={{ borderRadius: 8 }}
+                />
+              </Form.Item>
 
               {/* Credentials mode — always show password */}
               {!isOtpMode && (

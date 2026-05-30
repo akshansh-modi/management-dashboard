@@ -31,21 +31,16 @@ export const authService = {
   /**
    * Initiate the login flow (sends OTP if in OTP mode).
    */
-  initiate: async (params: { mobileNumber?: string; username?: string; password?: string }): Promise<AuthStepResponse> => {
-    const response = await api.post('/auth/initiate', params);
+  initiate: async (username: string, password?: string): Promise<AuthStepResponse> => {
+    const response = await api.post('/auth/initiate', { username, password });
     return response.data;
   },
 
   /**
    * Authenticate and receive JWT tokens.
    */
-  authenticate: async (params: {
-    username?: string;
-    mobileNumber?: string;
-    password?: string;
-    otp?: string;
-  }): Promise<AuthResponse> => {
-    const response = await api.post('/auth/authenticate', params);
+  authenticate: async (username: string, password?: string, otp?: string): Promise<AuthResponse> => {
+    const response = await api.post('/auth/authenticate', { username, password, otp });
     return response.data;
   },
 

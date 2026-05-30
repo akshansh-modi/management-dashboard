@@ -1,0 +1,241 @@
+/**
+ * Shared API types for the management dashboard.
+ * These mirror the procurement-service response DTOs.
+ */
+
+/** Spring Data Page envelope. */
+export interface Page<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number; // current page index (0-based)
+  size: number;
+  first: boolean;
+  last: boolean;
+  numberOfElements: number;
+}
+
+// ── Products ───────────────────────────────────────────────────────────────
+
+export interface DiscountTier {
+  minQuantity: number;
+  discountPercentage: number;
+}
+
+export interface DiscountPolicy {
+  policyId: string;
+  scope?: string;
+  aggregationGroupId?: string;
+  tiers?: DiscountTier[];
+  isActive?: boolean;
+}
+
+export interface Variant {
+  variantId?: string;
+  sku?: string;
+  price?: number;
+  stockQuantity?: number;
+  gstRate?: number;
+  isActive?: boolean;
+  attributes?: Record<string, string>;
+}
+
+export interface Product {
+  productId: string;
+  productName: string;
+  productDescription?: string;
+  productImagesUrl?: string[];
+  brandName?: string;
+  productBrandId?: string;
+  categoryId?: string;
+  price?: number;
+  currency?: string;
+  stockQuantity?: number;
+  unitOfMeasure?: string;
+  sku?: string;
+  hsn?: string;
+  attributes?: Record<string, unknown>;
+  documentUrls?: string[];
+  discountPolicy?: DiscountPolicy | null;
+  variantAttributes?: string[];
+  variants?: Variant[];
+  warranty?: string;
+  supportDetails?: string;
+  isActive?: boolean;
+  sellerId?: string;
+  gstRate?: number;
+}
+
+// ── Orders ─────────────────────────────────────────────────────────────────
+
+export type OrderStatus =
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'PROCESSING'
+  | 'SHIPPED'
+  | 'DELIVERED'
+  | 'CANCELLED';
+
+export interface Address {
+  addressLine?: string;
+  city?: string;
+  state?: string;
+  pincode?: string;
+  country?: string;
+  [key: string]: unknown;
+}
+
+export interface OrderItem {
+  productId: string;
+  variantId?: string;
+  variantAttributes?: Record<string, string>;
+  productName: string;
+  brandName?: string;
+  brandId?: string;
+  sku?: string;
+  imageUrl?: string;
+  quantity: number;
+  unitPrice: number;
+  discountApplied?: number;
+  finalUnitPrice: number;
+  subtotal: number;
+  sellerId?: string;
+  hsn?: string;
+  gstRate?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
+  igstAmount?: number;
+}
+
+export interface Order {
+  orderId: string;
+  userId: string;
+  orderDate: string;
+  status: OrderStatus;
+  subtotal?: number;
+  totalDiscount?: number;
+  shippingCharge?: number;
+  shippingPercentage?: number;
+  taxAmount?: number;
+  cgstAmount?: number;
+  sgstAmount?: number;
+  igstAmount?: number;
+  finalTotal?: number;
+  currency?: string;
+  shippingAddress?: Address;
+  items: OrderItem[];
+  invoiceNumber?: string;
+  paymentMethod?: string;
+}
+
+// ── Analytics ────────────────────────────────────────────────────────────────
+
+export interface AnalyticsKpis {
+  totalRevenue: number;
+  totalOrders: number;
+  activeProducts: number;
+  activeSellers?: number | null;
+  totalUsers?: number | null;
+  pendingPayments: number;
+}
+
+export interface TimeSeriesPoint {
+  label: string;
+  value: number;
+}
+
+export interface StatusCount {
+  status: string;
+  count: number;
+}
+
+export interface TopProduct {
+  productId: string;
+  productName: string;
+  quantitySold: number;
+  revenue: number;
+}
+
+export interface AnalyticsSummary {
+  scope: 'ADMIN' | 'SELLER';
+  kpis: AnalyticsKpis;
+  revenueByMonth: TimeSeriesPoint[];
+  ordersByStatus: StatusCount[];
+  topProducts: TopProduct[];
+}
+
+// ── Users ──────────────────────────────────────────────────────────────────
+
+export type Role = 'buyer' | 'seller' | 'admin';
+
+export interface AdminUser {
+  userId: string;
+  username?: string;
+  mobileNumber?: string;
+  emailId?: string;
+  role: Role;
+  phoneVerified?: boolean;
+  companyName?: string;
+  gstin?: string;
+  pan?: string;
+  stateCode?: string;
+  address?: Address;
+}
+
+// ── Catalog (brands / categories) ────────────────────────────────────────────
+
+export interface Brand {
+  brandId?: string;
+  brandName: string;
+  brandLogoUrl?: string;
+  brandImageUrl?: string;
+  brandDescription?: string;
+  brandWebsiteUrl?: string;
+  brandContactEmail?: string;
+  brandContactPhone?: string;
+  categoryIds?: string[];
+  brandAddress?: Address;
+}
+
+export interface Category {
+  categoryId?: string;
+  categoryName: string;
+  parentCategoryId?: string;
+  categoryImageUrl?: string;
+  categoryDescription?: string;
+  subCategories?: Category[];
+}
+
+// ── Content & Appearance ───────────────────────────────────────────────────
+
+export interface CarouselItem {
+  label: string;
+  actionLink: string;
+}
+
+export interface Carousel {
+  carouselId?: string;
+  title: string;
+  tagline?: string;
+  description?: string;
+  imageUrl?: string;
+  items?: CarouselItem[];
+  isEnabled?: boolean;
+}
+
+export type CardType = 
+  | 'FEATURED_BRANDS'
+  | 'FEATURED_VERTICALS'
+  | 'FEATURED_PRODUCTS'
+  | 'FEATURED_OFFERS';
+
+export interface ExploreCardConfig {
+  cardType: CardType;
+  ids?: string[];
+  enabled: boolean;
+}
+
+export interface HomepageConfig {
+  carouselIds?: string[];
+  exploreCards?: ExploreCardConfig[];
+}
