@@ -239,3 +239,20 @@ export interface HomepageConfig {
   carouselIds?: string[];
   exploreCards?: ExploreCardConfig[];
 }
+
+// ── Payment Verification ──────────────────────────────────────────────────
+
+/** Mirrors backend PendingPaymentResponse DTO. */
+export interface PendingPayment {
+  orderId: string;
+  userId: string;
+  buyerCompanyName?: string;
+  invoiceNumber?: string;
+  finalTotal?: number;
+  currency?: string;
+  status: string;
+  orderDate?: string;
+  paymentId?: string;
+  paymentStatus?: string;
+  paymentAmount?: number;
+}

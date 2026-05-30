@@ -22,6 +22,11 @@
 - [x] **Homepage API**: Ensure `GET /details/home` and `POST /details/home/create` are mapped correctly.
 
 ## 📦 Post-MVP Phase 4: Financials & Admin
-- [ ] **Payment Verification**: Implement `PaymentVerification.tsx` (Table of pending Stage 10 manual payment verifications).
-- [ ] **Payments API**: Wire up `GET /admin/payments/pending` and verification action buttons.
-- [ ] **Seller Settings**: Implement `/settings` for sellers to configure invoice prefixes, terms, and bank details.
+- [x] **Payment Verification**: Implement `PaymentVerification.tsx`.
+- [x] **Payments API**: Wire up `GET /admin/payments/pending` and verification action buttons.
+- [x] **Seller Settings**: Implement `/settings` for sellers to configure invoice prefixes, terms, and bank details.
+
+## 🚨 Identified Gaps (Pending Fixes)
+- [ ] **Gap 1: Missing Image Upload**: Implement backend `POST /upload/image` for Brands/Categories/Carousels.
+- [ ] **Gap 2: Payment Verification Mismatch**: Switch frontend `PaymentVerification.tsx` to use `GET /admin/payments/pending`.
+- [ ] **Gap 3: Seller Settings Missing Backend**: Implement `commission` field in `UserEntity` and create settings API in `SellerController`.

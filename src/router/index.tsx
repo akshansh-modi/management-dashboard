@@ -13,6 +13,8 @@ import CategoryManager from '../pages/categories/CategoryManager';
 import DiscountPolicyManager from '../pages/discounts/DiscountPolicyManager';
 import CarouselManager from '../pages/content/CarouselManager';
 import HomepageConfigManager from '../pages/content/HomepageConfigManager';
+import PaymentVerification from '../pages/orders/PaymentVerification';
+import Settings from '../pages/dashboard/Settings';
 
 /**
  * Application router with role-based route guards.
@@ -73,6 +75,18 @@ const router = createBrowserRouter([
       {
         path: 'homepage-config',
         element: <HomepageConfigManager />,
+      },
+      {
+        path: 'payments',
+        element: (
+          <RoleGuard allowedRoles={['admin']}>
+            <PaymentVerification />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: 'settings',
+        element: <Settings />,
       },
       {
         path: 'categories',

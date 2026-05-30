@@ -30,4 +30,15 @@ export const userService = {
     });
     return data.content;
   },
+
+  /** Seller-specific operations */
+  getSettings: async (): Promise<Partial<AdminUser>> => {
+    const { data } = await api.get<Partial<AdminUser>>('/seller/settings');
+    return data;
+  },
+
+  updateSettings: async (settings: Partial<AdminUser>): Promise<Partial<AdminUser>> => {
+    const { data } = await api.put<Partial<AdminUser>>('/seller/settings', settings);
+    return data;
+  },
 };
