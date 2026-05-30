@@ -15,6 +15,7 @@ import CarouselManager from '../pages/content/CarouselManager';
 import HomepageConfigManager from '../pages/content/HomepageConfigManager';
 import PaymentVerification from '../pages/orders/PaymentVerification';
 import Settings from '../pages/dashboard/Settings';
+import UserManager from '../pages/users/UserManager';
 
 /**
  * Application router with role-based route guards.
@@ -75,6 +76,14 @@ const router = createBrowserRouter([
       {
         path: 'homepage-config',
         element: <HomepageConfigManager />,
+      },
+      {
+        path: 'users',
+        element: (
+          <RoleGuard allowedRoles={['admin']}>
+            <UserManager />
+          </RoleGuard>
+        ),
       },
       {
         path: 'payments',

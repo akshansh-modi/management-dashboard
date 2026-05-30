@@ -27,6 +27,11 @@
 - [x] **Seller Settings**: Implement `/settings` for sellers to configure invoice prefixes, terms, and bank details.
 
 ## 🚨 Identified Gaps (Pending Fixes)
-- [ ] **Gap 1: Missing Image Upload**: Implement backend `POST /upload/image` for Brands/Categories/Carousels.
-- [ ] **Gap 2: Payment Verification Mismatch**: Switch frontend `PaymentVerification.tsx` to use `GET /admin/payments/pending`.
-- [ ] **Gap 3: Seller Settings Missing Backend**: Implement `commission` field in `UserEntity` and create settings API in `SellerController`.
+- [x] **Gap 1: Missing Image Upload**: Implement backend `POST /upload/image` for Brands/Categories/Carousels.
+- [x] **Gap 2: Payment Verification Mismatch**: Switch frontend `PaymentVerification.tsx` to use `GET /admin/payments/pending`.
+- [x] **Gap 3: Seller Settings Missing Backend**: Implement settings API in `SellerController`.
+
+## 📦 Post-MVP Phase 7: User Management & Security Hardening
+- [x] **UserManager.tsx**: Create screen for viewing users and switching user roles.
+- [x] **Users Routing**: Add `/users` route under RoleGuard inside `router/index.tsx`.
+- [x] **Security Hardening**: Secure password hashing with `@JsonIgnore`, protect `/products/seller/**` GET endpoint, and configure `application.properties` to suppress error messages/stacktraces.
