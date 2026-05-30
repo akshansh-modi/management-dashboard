@@ -1,0 +1,393 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ─── CSS Reset & Global Styles ────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #F0F2F5;
+  color: #1A1A2E;
+  line-height: 1.6;
+}
+
+/* ─── Scrollbar Styling ────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* ─── Sidebar Styling ──────────────────────────────────────────────── */
+
+.dashboard-sider {
+  position: fixed !important;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  overflow: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dashboard-sider .sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 8px;
+}
+
+.dashboard-sider .sidebar-logo .logo-icon {
+  width: 36px;
+  height: 36px;
+  background: linear-gradient(135deg, #2F54EB, #597EF7);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.dashboard-sider .sidebar-logo .logo-text {
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 1;
+  transition: opacity 0.2s;
+}
+
+.dashboard-sider.ant-layout-sider-collapsed .logo-text {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+/* ─── Header Styling ───────────────────────────────────────────────── */
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 64px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 99;
+  background: #FFFFFF;
+}
+
+.dashboard-header .header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dashboard-header .header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dashboard-header .header-right .user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.dashboard-header .header-right .user-info:hover {
+  background-color: #F5F5F5;
+}
+
+.dashboard-header .header-right .user-info .user-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #1A1A2E;
+}
+
+.dashboard-header .header-right .user-info .user-role {
+  font-size: 12px;
+  color: #6B7280;
+}
+
+/* ─── Content Area ─────────────────────────────────────────────────── */
+
+.dashboard-content {
+  padding: 24px;
+  min-height: calc(100vh - 64px);
+}
+
+/* ─── Page Headers ─────────────────────────────────────────────────── */
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1A1A2E;
+  margin-bottom: 4px;
+}
+
+.page-header p {
+  font-size: 14px;
+  color: #6B7280;
+}
+
+/* ─── KPI Cards ────────────────────────────────────────────────────── */
+
+.kpi-card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #F0F0F0;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.kpi-card .kpi-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  margin-bottom: 16px;
+}
+
+.kpi-card .kpi-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 12px;
+  margin-top: 8px;
+}
+
+.kpi-card .kpi-trend.up {
+  color: #52C41A;
+  background: #F6FFED;
+}
+
+.kpi-card .kpi-trend.down {
+  color: #FF4D4F;
+  background: #FFF1F0;
+}
+
+/* ─── Chart Cards ──────────────────────────────────────────────────── */
+
+.chart-card {
+  background: #FFFFFF;
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid #F0F0F0;
+}
+
+.chart-card .chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.chart-card .chart-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1A1A2E;
+}
+
+/* ─── Login Page ───────────────────────────────────────────────────── */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0F1629 0%, #1B2A4A 50%, #2F54EB 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-page::before {
+  content: '';
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(47, 84, 235, 0.15), transparent 60%);
+  top: -200px;
+  right: -200px;
+  border-radius: 50%;
+}
+
+.login-page::after {
+  content: '';
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(47, 84, 235, 0.1), transparent 60%);
+  bottom: -100px;
+  left: -100px;
+  border-radius: 50%;
+}
+
+.login-card {
+  width: 420px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 48px 40px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 1;
+}
+
+.login-card .login-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.login-card .login-header .login-logo {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, #2F54EB, #597EF7);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0 auto 16px;
+}
+
+.login-card .login-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1A1A2E;
+  margin-bottom: 6px;
+}
+
+.login-card .login-header p {
+  font-size: 14px;
+  color: #6B7280;
+}
+
+/* ─── Access Denied Page ───────────────────────────────────────────── */
+
+.access-denied {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #F0F2F5;
+}
+
+.access-denied .denied-card {
+  text-align: center;
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 48px;
+  max-width: 440px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.access-denied .denied-icon {
+  font-size: 64px;
+  color: #FF4D4F;
+  margin-bottom: 24px;
+}
+
+.access-denied h1 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1A1A2E;
+  margin-bottom: 8px;
+}
+
+.access-denied p {
+  font-size: 14px;
+  color: #6B7280;
+  margin-bottom: 24px;
+}
+
+/* ─── Animations ───────────────────────────────────────────────────── */
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+.animate-fade-in-delay-1 {
+  animation: fadeInUp 0.5s ease-out 0.1s both;
+}
+
+.animate-fade-in-delay-2 {
+  animation: fadeInUp 0.5s ease-out 0.2s both;
+}
+
+.animate-fade-in-delay-3 {
+  animation: fadeInUp 0.5s ease-out 0.3s both;
+}
+
+/* ─── Status Tags ──────────────────────────────────────────────────── */
+
+.status-pending { color: #FAAD14; }
+.status-confirmed { color: #2F54EB; }
+.status-shipped { color: #722ED1; }
+.status-delivered { color: #52C41A; }
+.status-cancelled { color: #FF4D4F; }
