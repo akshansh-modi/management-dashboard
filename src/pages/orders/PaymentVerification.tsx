@@ -14,6 +14,7 @@ import {
   Col,
   Tooltip,
   Alert,
+  Tabs,
 } from 'antd';
 import {
   CheckCircleOutlined,
@@ -30,6 +31,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import duration from 'dayjs/plugin/duration';
 import { paymentService } from '../../services/paymentService';
+import BalancePaymentsTab from './BalancePaymentsTab';
 import type { PendingPayment } from '../../types';
 
 dayjs.extend(relativeTime);
@@ -264,6 +266,14 @@ export default function PaymentVerification() {
         </Button>
       </div>
 
+      <Tabs
+        defaultActiveKey="advance"
+        items={[
+          {
+            key: 'advance',
+            label: 'Advance (10%)',
+            children: (
+              <>
       {/* KPI cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
         <Col xs={24} sm={8}>
@@ -316,6 +326,16 @@ export default function PaymentVerification() {
           }}
         />
       </div>
+              </>
+            ),
+          },
+          {
+            key: 'balance',
+            label: 'Balance (90%)',
+            children: <BalancePaymentsTab />,
+          },
+        ]}
+      />
 
       {/* Verify modal */}
       <Modal

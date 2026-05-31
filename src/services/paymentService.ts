@@ -1,5 +1,5 @@
 import api from './api';
-import type { PendingPayment } from '../types';
+import type { PendingPayment, BalancePayment } from '../types';
 
 export const paymentService = {
   /**
@@ -23,6 +23,23 @@ export const paymentService = {
       status: 'CONFIRMED',
       notes: utr,
     });
+    return data;
+  },
+
+  /**
+   * Admin-only: delivered orders whose 90% balance (Stage-90) is still PENDING
+   * and awaiting finance verification.
+   */
+  getBalancePayments: async (): Promise<BalancePayment[]> => {
+    const { data } = await api.get<BalancePayment[]>('/admin/payments/balance');
+    return data;
+  },
+
+  /**
+   * Finance verification of a Stage-90 balance — records the payment method + UTR.
+   */
+  verifyBalancePayment: async (orderId: string, utr: string, method: string) => {
+    const { data } = await api.post(`/admin/payments/${orderId}/balance/verify`, { utr, method });
     return data;
   },
 };

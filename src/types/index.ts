@@ -296,3 +296,21 @@ export interface PendingPayment {
   /** True when PENDING but already past expiresAt — computed server-side. */
   isExpired?: boolean;
 }
+
+/** Mirrors backend BalancePaymentResponse DTO (Stage-90, 90% balance). */
+export interface BalancePayment {
+  orderId: string;
+  userId: string;
+  buyerCompanyName?: string;
+  buyerPhone?: string;
+  invoiceNumber?: string;
+  finalTotal?: number;
+  balanceAmount?: number;
+  currency?: string;
+  paymentId?: string;
+  paymentStatus?: string;
+  method?: string;
+  utr?: string;
+  orderDate?: string;
+  deliveredAt?: string;
+}
