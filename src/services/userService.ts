@@ -1,5 +1,5 @@
 import api from './api';
-import type { Page, AdminUser, Role } from '../types';
+import type { Page, AdminUser, Role, BuyerAnalytics, Order } from '../types';
 
 /**
  * Admin user-management API. Admin-only on the backend (/admin/**).
@@ -20,6 +20,20 @@ export const userService = {
 
   changeRole: async (userId: string, role: Role): Promise<AdminUser> => {
     const { data } = await api.patch<AdminUser>(`/admin/users/${userId}/role`, { role });
+    return data;
+  },
+
+  /** Per-buyer importance analytics (admin). */
+  getBuyerAnalytics: async (userId: string): Promise<BuyerAnalytics> => {
+    const { data } = await api.get<BuyerAnalytics>(`/admin/users/${userId}/analytics`);
+    return data;
+  },
+
+  /** A specific user's orders (admin), newest first. */
+  getBuyerOrders: async (userId: string, page = 0, size = 10): Promise<Page<Order>> => {
+    const { data } = await api.get<Page<Order>>(`/admin/users/${userId}/orders`, {
+      params: { page, size },
+    });
     return data;
   },
 

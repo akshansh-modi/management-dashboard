@@ -18,6 +18,13 @@ export default function Settings() {
           companyName: data.companyName || '',
           gstin: data.gstin || '',
           pan: data.pan || '',
+          address: {
+            addressLine: data.address?.addressLine || '',
+            city: data.address?.city || '',
+            state: data.address?.state || '',
+            pincode: data.address?.pincode || '',
+            country: data.address?.country || '',
+          },
         });
       } catch (err) {
         message.error('Failed to load settings');
@@ -91,6 +98,37 @@ export default function Settings() {
                     rules={[{ required: true, message: 'Required' }]}
                   >
                     <Input placeholder="e.g. ABCDE1234F" />
+                  </Form.Item>
+                </Col>
+              </Row>
+
+              <Title level={5} style={{ marginTop: 8 }}>Registered Address</Title>
+              <Form.Item name={['address', 'addressLine']} label="Address line">
+                <Input placeholder="Street, building, area" />
+              </Form.Item>
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item name={['address', 'city']} label="City">
+                    <Input placeholder="City" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item name={['address', 'state']} label="State">
+                    <Input placeholder="State" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item
+                    name={['address', 'pincode']}
+                    label="Pincode"
+                    rules={[{ pattern: /^\d{6}$/, message: '6-digit pincode' }]}
+                  >
+                    <Input placeholder="6-digit pincode" maxLength={6} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} md={12}>
+                  <Form.Item name={['address', 'country']} label="Country">
+                    <Input placeholder="Country" />
                   </Form.Item>
                 </Col>
               </Row>

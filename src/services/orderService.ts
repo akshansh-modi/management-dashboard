@@ -15,10 +15,12 @@ export const orderService = {
     return data;
   },
 
-  /** Seller: orders containing this seller's products. */
-  listForSeller: async (params: { page?: number; size?: number } = {}): Promise<Page<Order>> => {
-    const { page = 0, size = 10 } = params;
-    const { data } = await api.get<Page<Order>>('/seller/orders', { params: { page, size } });
+  /** Seller: orders containing this seller's products (optional server-side status filter). */
+  listForSeller: async (params: { status?: string; page?: number; size?: number } = {}): Promise<Page<Order>> => {
+    const { status, page = 0, size = 10 } = params;
+    const { data } = await api.get<Page<Order>>('/seller/orders', {
+      params: { ...(status ? { status } : {}), page, size },
+    });
     return data;
   },
 

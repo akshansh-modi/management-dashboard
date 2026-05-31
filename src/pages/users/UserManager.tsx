@@ -19,6 +19,7 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import { useNavigate } from 'react-router-dom';
 import { userService } from '../../services/userService';
 import type { AdminUser, Role } from '../../types';
 
@@ -33,6 +34,7 @@ const ROLE_COLORS: Record<Role, string> = {
 
 export default function UserManager() {
   const { message } = App.useApp();
+  const navigate = useNavigate();
   
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(false);
@@ -184,15 +186,20 @@ export default function UserManager() {
       title: 'Actions',
       key: 'actions',
       align: 'right',
-      render: (_, u) => (
-        <Button
-          type="text"
-          icon={<EyeOutlined />}
-          onClick={() => showDetails(u)}
-        >
-          View details
-        </Button>
-      ),
+      render: (_, u) =>
+        u.role === 'buyer' ? (
+          <Button
+            type="text"
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/users/${u.userId}`)}
+          >
+            Profile & analytics
+          </Button>
+        ) : (
+          <Button type="text" icon={<EyeOutlined />} onClick={() => showDetails(u)}>
+            View details
+          </Button>
+        ),
     },
   ];
 

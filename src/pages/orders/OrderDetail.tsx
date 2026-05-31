@@ -97,7 +97,8 @@ export default function OrderDetail() {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin tip="Loading order…" />
+        <Spin size="large" />
+        <div style={{ marginTop: 12, color: '#6B7280' }}>Loading order…</div>
       </div>
     );
   }
@@ -180,6 +181,7 @@ export default function OrderDetail() {
           <div>
             <Text type="secondary">
               Placed {order.orderDate ? dayjs(order.orderDate).format('DD MMM YYYY, HH:mm') : '—'}
+              {order.buyerCompanyName ? ` · ${order.buyerCompanyName}` : ''}
               {order.invoiceNumber ? ` · Invoice ${order.invoiceNumber}` : ''}
             </Text>
           </div>
@@ -252,9 +254,7 @@ export default function OrderDetail() {
                   {inr(order.shippingCharge)}
                   {order.shippingPercentage ? ` (${order.shippingPercentage}%)` : ''}
                 </Descriptions.Item>
-                <Descriptions.Item label="CGST">{inr(order.cgstAmount)}</Descriptions.Item>
-                <Descriptions.Item label="SGST">{inr(order.sgstAmount)}</Descriptions.Item>
-                <Descriptions.Item label="IGST">{inr(order.igstAmount)}</Descriptions.Item>
+                <Descriptions.Item label="GST">{inr(order.taxAmount)}</Descriptions.Item>
               </Descriptions>
             )}
             <Divider style={{ margin: '12px 0' }} />

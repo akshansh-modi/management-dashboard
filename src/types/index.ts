@@ -33,6 +33,7 @@ export interface DiscountPolicy {
 export interface Variant {
   variantId?: string;
   sku?: string;
+  heading?: string;
   price?: number;
   stockQuantity?: number;
   gstRate?: number;
@@ -126,6 +127,7 @@ export interface Order {
   items: OrderItem[];
   invoiceNumber?: string;
   paymentMethod?: string;
+  buyerCompanyName?: string;
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────
@@ -180,6 +182,34 @@ export interface AdminUser {
   pan?: string;
   stateCode?: string;
   address?: Address;
+}
+
+// ── Buyer analytics ──────────────────────────────────────────────────────────
+
+export interface TopBrand {
+  brandName: string;
+  quantitySold: number;
+  spend: number;
+}
+
+export interface BuyerAnalyticsKpis {
+  totalSpend: number;
+  totalOrders: number;
+  totalItems: number;
+  avgOrderValue: number;
+  lastOrderDate?: string | null;
+  daysSinceLastOrder?: number | null;
+  cancellationRate: number;
+  pendingPayments: number;
+}
+
+export interface BuyerAnalytics {
+  userId: string;
+  kpis: BuyerAnalyticsKpis;
+  monthlySpend: TimeSeriesPoint[];
+  ordersByStatus: StatusCount[];
+  topProducts: TopProduct[];
+  topBrands: TopBrand[];
 }
 
 // ── Catalog (brands / categories) ────────────────────────────────────────────

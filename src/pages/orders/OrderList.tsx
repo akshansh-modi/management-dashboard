@@ -30,9 +30,16 @@ const STATUS_TABS: { key: string; label: string }[] = [
 ];
 
 export default function OrderList() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, userId } = useAuth();
   const navigate = useNavigate();
   const { message } = App.useApp();
+
+  // Sellers see only their own line items and their portion of each order total,
+  // matching the order-detail view and the multi-seller policy.
+  const sellerItems = (o: Order) =>
+    isAdmin || !userId ? o.items : o.items.filter((i) => i.sellerId === userId);
+  const rowTotal = (o: Order) =>
+    isAdmin || !userId ? o.finalTotal : sellerItems(o).reduce((s, i) => s + (i.subtotal ?? 0), 0);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,19 +51,11 @@ export default function OrderList() {
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
+      const status = statusFilter === 'ALL' ? undefined : statusFilter;
       const res = isAdmin
-        ? await orderService.listAll({
-            status: statusFilter === 'ALL' ? undefined : statusFilter,
-            page,
-            size: pageSize,
-          })
-        : await orderService.listForSeller({ page, size: pageSize });
-      // Seller endpoint isn't status-filtered server-side, so filter client-side.
-      let content = res.content;
-      if (!isAdmin && statusFilter !== 'ALL') {
-        content = content.filter((o) => o.status === statusFilter);
-      }
-      setOrders(content);
+        ? await orderService.listAll({ status, page, size: pageSize })
+        : await orderService.listForSeller({ status, page, size: pageSize });
+      setOrders(res.content);
       setTotal(res.totalElements);
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
@@ -77,6 +76,17 @@ export default function OrderList() {
       key: 'orderId',
       render: (v) => <Text strong style={{ fontFamily: 'monospace' }}>{v}</Text>,
     },
+    ...(isAdmin
+      ? ([
+          {
+            title: 'Customer',
+            dataIndex: 'buyerCompanyName',
+            key: 'buyerCompanyName',
+            responsive: ['md'],
+            render: (v?: string) => v || <Text type="secondary">—</Text>,
+          },
+        ] as ColumnsType<Order>)
+      : []),
     {
       title: 'Date',
       dataIndex: 'orderDate',
@@ -85,19 +95,20 @@ export default function OrderList() {
       render: (v?: string) => (v ? dayjs(v).format('DD MMM YYYY, HH:mm') : '—'),
     },
     {
-      title: 'Items',
+      title: isAdmin ? 'Items' : 'Your items',
       key: 'items',
       align: 'center',
       responsive: ['lg'],
-      render: (_, o) => o.items?.length ?? 0,
+      render: (_, o) => sellerItems(o)?.length ?? 0,
     },
     {
-      title: 'Total',
-      dataIndex: 'finalTotal',
-      key: 'finalTotal',
+      title: isAdmin ? 'Total' : 'Your total',
+      key: 'total',
       align: 'right',
-      render: (v?: number) =>
-        v != null ? <Text strong>₹{Number(v).toLocaleString('en-IN')}</Text> : '—',
+      render: (_, o) => {
+        const v = rowTotal(o);
+        return v != null ? <Text strong>₹{Number(v).toLocaleString('en-IN')}</Text> : '—';
+      },
     },
     {
       title: 'Status',

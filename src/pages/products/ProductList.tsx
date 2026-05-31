@@ -36,14 +36,24 @@ export default function ProductList() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce the search box, then query the server (keeps pagination correct).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(0);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
       const res =
         isAdmin || !userId
-          ? await productService.listAll(page, pageSize)
-          : await productService.listBySeller(userId, page, pageSize);
+          ? await productService.listAll(page, pageSize, debouncedSearch || undefined)
+          : await productService.listBySeller(userId, page, pageSize, debouncedSearch || undefined);
       setProducts(res.content);
       setTotal(res.totalElements);
     } catch (e) {
@@ -52,7 +62,7 @@ export default function ProductList() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, userId, page, pageSize, message]);
+  }, [isAdmin, userId, page, pageSize, debouncedSearch, message]);
 
   useEffect(() => {
     fetchProducts();
@@ -68,14 +78,6 @@ export default function ProductList() {
       message.error(err?.response?.data?.message || err?.message || 'Delete failed');
     }
   };
-
-  // Client-side search over the current page (server has no name filter yet)
-  const visible = products.filter((p) =>
-    search.trim()
-      ? (p.productName ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (p.sku ?? '').toLowerCase().includes(search.toLowerCase())
-      : true
-  );
 
   const columns: ColumnsType<Product> = [
     {
@@ -188,7 +190,7 @@ export default function ProductList() {
         <Input
           allowClear
           prefix={<SearchOutlined style={{ color: '#9CA3AF' }} />}
-          placeholder="Search by name or SKU (current page)"
+          placeholder="Search by name or SKU"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           style={{ maxWidth: 360, marginBottom: 16 }}
@@ -197,7 +199,7 @@ export default function ProductList() {
           rowKey="productId"
           loading={loading}
           columns={columns}
-          dataSource={visible}
+          dataSource={products}
           scroll={{ x: 'max-content' }}
           pagination={{
             current: page + 1,

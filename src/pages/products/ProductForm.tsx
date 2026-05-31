@@ -12,9 +12,18 @@ import {
   Space,
   Spin,
   Alert,
+  Card,
+  Divider,
   App,
 } from 'antd';
-import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
+
+/** Default heading derived from a variant's attribute values — mirrors the backend. */
+function deriveHeading(attributes?: Record<string, string>): string {
+  return Object.values(attributes ?? {})
+    .filter((v) => v && String(v).trim())
+    .join(' / ');
+}
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { productService } from '../../services/productService';
@@ -41,6 +50,19 @@ interface FormValues {
   warranty?: string;
   supportDetails?: string;
   isActive: boolean;
+  variantAttributes?: string[];
+  variants?: VariantRow[];
+}
+
+interface VariantRow {
+  variantId?: string;
+  heading?: string;
+  sku?: string;
+  price?: number;
+  stockQuantity?: number;
+  gstRate?: number;
+  isActive?: boolean;
+  attributes?: Record<string, string>;
 }
 
 export default function ProductForm() {
@@ -50,6 +72,9 @@ export default function ProductForm() {
   const { isAdmin } = useAuth();
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
+  const variantAttributes: string[] = Form.useWatch('variantAttributes', form) || [];
+  const watchedVariants = Form.useWatch('variants', form);
+  const hasVariants = Array.isArray(watchedVariants) && watchedVariants.length > 0;
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -57,7 +82,6 @@ export default function ProductForm() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [policies, setPolicies] = useState<DiscountPolicy[]>([]);
   const [sellers, setSellers] = useState<AdminUser[]>([]);
-  const [existing, setExisting] = useState<Product | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Load reference data (and the product itself when editing)
@@ -82,7 +106,6 @@ export default function ProductForm() {
         if (isEdit && productId) {
           const product = await productService.getById(productId);
           if (cancelled) return;
-          setExisting(product);
           form.setFieldsValue({
             productName: product.productName,
             sku: product.sku,
@@ -100,6 +123,19 @@ export default function ProductForm() {
             warranty: product.warranty,
             supportDetails: product.supportDetails,
             isActive: product.isActive !== false,
+            variantAttributes: product.variantAttributes ?? [],
+            variants: (product.variants ?? []).map((v) => ({
+              variantId: v.variantId,
+              // Show a heading only when it's a real override (differs from the
+              // attribute-derived default), so blank stays blank and re-derives.
+              heading: v.heading && v.heading !== deriveHeading(v.attributes) ? v.heading : undefined,
+              sku: v.sku,
+              price: v.price,
+              stockQuantity: v.stockQuantity,
+              gstRate: v.gstRate,
+              isActive: v.isActive ?? true,
+              attributes: v.attributes ?? {},
+            })),
           });
         }
       } catch (e) {
@@ -137,8 +173,21 @@ export default function ProductForm() {
         discountPolicy: values.discountPolicyId ? { policyId: values.discountPolicyId } : null,
       };
       if (isAdmin && values.sellerId) payload.sellerId = values.sellerId;
-      // Preserve variants untouched when editing (this form edits top-level fields only)
-      if (isEdit && existing?.variants?.length) payload.variants = existing.variants;
+
+      // Variants — each carries its own price/stock/heading. A blank heading is
+      // sent as undefined so the backend re-derives the default from attributes.
+      payload.variantAttributes = values.variantAttributes ?? [];
+      const variantList = (values.variants ?? []).map((v) => ({
+        variantId: v.variantId,
+        sku: v.sku,
+        heading: v.heading?.trim() ? v.heading.trim() : undefined,
+        price: v.price,
+        stockQuantity: v.stockQuantity,
+        gstRate: v.gstRate,
+        isActive: v.isActive ?? true,
+        attributes: v.attributes ?? {},
+      }));
+      if (variantList.length) payload.variants = variantList;
 
       if (isEdit && productId) {
         await productService.update(productId, payload);
@@ -159,7 +208,8 @@ export default function ProductForm() {
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 80 }}>
-        <Spin tip="Loading…" />
+        <Spin size="large" />
+        <div style={{ marginTop: 12, color: '#6B7280' }}>Loading…</div>
       </div>
     );
   }
@@ -182,12 +232,12 @@ export default function ProductForm() {
         <Alert type="error" showIcon message={loadError} style={{ marginBottom: 16 }} />
       )}
 
-      {isEdit && existing?.variants?.length ? (
+      {hasVariants ? (
         <Alert
           type="info"
           showIcon
-          message="This product has variants"
-          description="This form edits top-level fields. Variant pricing/stock is preserved unchanged on save."
+          message="This product uses variants"
+          description="Each variant carries its own price, stock and (optional) heading below. The top-level price/stock are used only when there are no variants."
           style={{ marginBottom: 16 }}
         />
       ) : null}
@@ -262,9 +312,10 @@ export default function ProductForm() {
               <Form.Item
                 name="price"
                 label="Price (₹)"
-                rules={[{ required: true, message: 'Price is required' }]}
+                rules={[{ required: !hasVariants, message: 'Price is required' }]}
+                tooltip={hasVariants ? 'Ignored while variants exist — variant prices apply' : undefined}
               >
-                <InputNumber min={0} style={{ width: '100%' }} placeholder="0.00" />
+                <InputNumber min={0} style={{ width: '100%' }} placeholder="0.00" disabled={hasVariants} />
               </Form.Item>
             </Col>
             <Col xs={12} md={6}>
@@ -294,6 +345,7 @@ export default function ProductForm() {
                   name="sellerId"
                   label="Seller"
                   tooltip="Assign which seller owns this product"
+                  rules={[{ required: true, message: 'Select the seller who owns this product' }]}
                 >
                   <Select
                     showSearch
@@ -343,6 +395,114 @@ export default function ProductForm() {
               </Form.Item>
             </Col>
           </Row>
+
+          <Divider style={{ marginTop: 8 }}>Variants</Divider>
+          <Form.Item
+            name="variantAttributes"
+            label="Variant attributes"
+            tooltip="Attribute keys that distinguish variants (e.g. horsepower, size). Each variant gets an input per key."
+          >
+            <Select
+              mode="tags"
+              tokenSeparators={[',']}
+              placeholder="Add attribute keys and press Enter (e.g. horsepower)"
+              open={false}
+              suffixIcon={null}
+            />
+          </Form.Item>
+
+          <Form.List name="variants">
+            {(fields, { add, remove }) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Card
+                    key={key}
+                    size="small"
+                    style={{ background: '#FAFBFC' }}
+                    title={`Variant ${name + 1}`}
+                    extra={
+                      <Button
+                        type="text"
+                        danger
+                        icon={<MinusCircleOutlined />}
+                        onClick={() => remove(name)}
+                      />
+                    }
+                  >
+                    <Row gutter={12}>
+                      <Col xs={24} md={8}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'heading']}
+                          label="Heading (optional)"
+                          tooltip="Leave blank to auto-generate from the attribute values"
+                        >
+                          <Input placeholder="Auto from attributes if blank" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={8}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'sku']}
+                          label="SKU"
+                          rules={[{ required: true, message: 'SKU required' }]}
+                        >
+                          <Input placeholder="Variant SKU" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'price']}
+                          label="Price (₹)"
+                          rules={[{ required: true, message: 'Required' }]}
+                        >
+                          <InputNumber min={0} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <Form.Item {...restField} name={[name, 'stockQuantity']} label="Qty">
+                          <InputNumber min={0} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </Col>
+
+                      {variantAttributes.map((attrKey) => (
+                        <Col xs={12} md={6} key={attrKey}>
+                          <Form.Item {...restField} name={[name, 'attributes', attrKey]} label={attrKey}>
+                            <Input placeholder={attrKey} />
+                          </Form.Item>
+                        </Col>
+                      ))}
+
+                      <Col xs={12} md={4}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'gstRate']}
+                          label="GST %"
+                        >
+                          <InputNumber min={0} max={28} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={12} md={4}>
+                        <Form.Item
+                          {...restField}
+                          name={[name, 'isActive']}
+                          label="Active"
+                          valuePropName="checked"
+                          initialValue={true}
+                        >
+                          <Switch size="small" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </Card>
+                ))}
+                <Button type="dashed" onClick={() => add({ isActive: true })} icon={<PlusOutlined />} block>
+                  Add variant
+                </Button>
+              </div>
+            )}
+          </Form.List>
 
           <Space>
             <Button onClick={() => navigate('/products')}>Cancel</Button>

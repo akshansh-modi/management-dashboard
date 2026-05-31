@@ -6,16 +6,18 @@ import type { Page, Product, Brand, Category, DiscountPolicy } from '../types';
  * their own via the seller-specific list endpoint.
  */
 export const productService = {
-  /** Admin: list all products (paginated). */
-  listAll: async (page = 0, size = 10): Promise<Page<Product>> => {
-    const { data } = await api.get<Page<Product>>('/products/all', { params: { page, size } });
+  /** Admin: list all products (paginated, optional server-side search). */
+  listAll: async (page = 0, size = 10, search?: string): Promise<Page<Product>> => {
+    const { data } = await api.get<Page<Product>>('/products/all', {
+      params: { page, size, ...(search ? { search } : {}) },
+    });
     return data;
   },
 
-  /** Seller: list only this seller's products (paginated). */
-  listBySeller: async (sellerId: string, page = 0, size = 10): Promise<Page<Product>> => {
+  /** Seller: list only this seller's products (paginated, optional server-side search). */
+  listBySeller: async (sellerId: string, page = 0, size = 10, search?: string): Promise<Page<Product>> => {
     const { data } = await api.get<Page<Product>>(`/products/seller/${sellerId}`, {
-      params: { page, size },
+      params: { page, size, ...(search ? { search } : {}) },
     });
     return data;
   },
