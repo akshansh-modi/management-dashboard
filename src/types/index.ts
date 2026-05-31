@@ -277,6 +277,8 @@ export interface PendingPayment {
   orderId: string;
   userId: string;
   buyerCompanyName?: string;
+  /** Buyer phone from the frozen snapshot — for quick follow-up. */
+  buyerPhone?: string;
   invoiceNumber?: string;
   finalTotal?: number;
   currency?: string;
@@ -285,4 +287,12 @@ export interface PendingPayment {
   paymentId?: string;
   paymentStatus?: string;
   paymentAmount?: number;
+  /** System-generated UPI transaction reference for reconciliation. */
+  tr?: string;
+  /** Full UPI deep-link the buyer was asked to pay via. */
+  upiLink?: string;
+  /** ISO-8601 expiry timestamp of the Stage-10 payment. */
+  expiresAt?: string;
+  /** True when PENDING but already past expiresAt — computed server-side. */
+  isExpired?: boolean;
 }

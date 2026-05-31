@@ -13,13 +13,15 @@ export const paymentService = {
   },
 
   /**
-   * Verify an order's payment, transitioning it from PENDING → CONFIRMED.
-   * Uses POST /orders/{orderId}/status (the admin status transition endpoint).
+   * Verify an order's Stage-10 payment, transitioning it PENDING → CONFIRMED.
+   * The UTR (or transaction reference) is stored on the Payment record for audit.
+   * Uses POST /orders/{orderId}/status (the admin status transition endpoint),
+   * which internally calls verifyStage10 with the supplied reference.
    */
-  verifyPayment: async (orderId: string, notes?: string) => {
+  verifyPayment: async (orderId: string, utr?: string) => {
     const { data } = await api.post(`/orders/${orderId}/status`, {
       status: 'CONFIRMED',
-      notes,
+      notes: utr,
     });
     return data;
   },

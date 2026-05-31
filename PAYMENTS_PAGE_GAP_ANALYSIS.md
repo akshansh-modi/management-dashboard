@@ -1,77 +1,72 @@
-# Payments Page — Gap Analysis
+# Payments Page — Gap Analysis (v2)
 
-_Scope: the admin **Payment Verification** page (`src/pages/orders/PaymentVerification.tsx`) and the backend it depends on. Date: 2026-05-31._
+_Scope: the admin **Payment Verification** page (`src/pages/orders/PaymentVerification.tsx`), its service (`paymentService.ts`), and the backend it depends on (`AdminService.listPendingPayments`, `PaymentService.verifyStage10`, `PendingPaymentResponse`). Date: 2026-05-31. Supersedes v1._
 
 ## How payments work today
 
-The platform uses a **two-stage** payment model:
-
-- **Stage 10** — a 10% advance. Created automatically at checkout (`createStage10`) with status `PENDING`, a UPI link, a transaction reference (`tr`), and a **24-hour expiry**.
-- **Stage 90** — the 90% balance. Created automatically when an order moves **SHIPPED → DELIVERED** (`createStage90`), and is written straight to status `VERIFIED` — there is no actual collection step.
-
-The Payments page lists orders in `PENDING` status (`GET /admin/payments/pending` → `AdminService.listPendingPayments`) and lets an admin **Verify**, which posts `POST /orders/{id}/status {status: CONFIRMED}`. That single call runs `verifyStage10` (marks the Stage-10 payment `VERIFIED`) **and** transitions the order to `CONFIRMED`. A background cron (`processHourlyExpiry`) auto-cancels any `PENDING` order whose Stage-10 payment passes its 24h expiry.
-
-So the page today covers exactly one thing: **verifying the 10% advance**.
+Two-stage model: **Stage 10** = 10% advance, created `PENDING` at checkout with a UPI link, a transaction reference (`tr`), and a **24-hour expiry**; **Stage 90** = 90% balance, created **already `VERIFIED`** when an order goes SHIPPED → DELIVERED (no real collection step). The Payments page lists `PENDING` orders (`GET /admin/payments/pending`) and "Verify" posts `POST /orders/{id}/status {status: CONFIRMED, notes: <utr>}`, which runs `verifyStage10` (marks the Stage-10 payment `VERIFIED`) and confirms the order. An hourly cron auto-cancels `PENDING` orders whose Stage-10 payment expired.
 
 ---
 
-## Gaps, by severity
+## ✅ Closed since v1
+
+The page has been materially upgraded — these earlier gaps are now resolved end-to-end (DTO → service → UI):
+
+- **Reconciliation (was H2):** `PendingPaymentResponse` now carries `tr` and `upiLink`, populated in `AdminService.toPendingPayment` and shown in the verify modal with copy buttons + an "Open UPI Payment" link.
+- **Expiry visibility (was M1):** `expiresAt`/`isExpired` are computed server-side; the table shows a live countdown, an "urgent < 1h" warning, an "Expired" tag, and disables Verify for expired rows.
+- **Missing-payment rows (was M6):** rows with no Stage-10 record show a "No payment" tag and Verify is disabled.
+- **Buyer contact (was L1):** `buyerPhone` is surfaced in the table and modal.
+- **Summary KPIs (was L2):** Awaiting Verification, Total Advance Due (10%), Total Order Value.
+- **Refresh (was L3):** manual Refresh button + 60s auto-refresh + "last refreshed" timestamp.
+- **Advance vs total labelling (was L4):** column is "Advance (10%)" and the modal shows "X of Y order total".
+
+Good baseline now. The remaining gaps are below.
+
+---
+
+## Remaining gaps, by severity
 
 ### 🔴 HIGH
 
-**H1 — The 90% balance is invisible and never actually verified.**
-`createStage90` writes the balance payment as `VERIFIED` with no collection workflow, and the Payments page only ever queries Stage 10. So ~90% of every order's money has **no tracking, no verification, and no view** anywhere in the dashboard. For a B2B platform this is the single biggest gap: the page is a 10%-advance tool, not a payments tool.
-→ _Recommendation: add a "Balance / Stage-90" view (due, collected, pending) and a real verify/collect action for it, or explicitly model it as COD and surface collection status._
+**H1 — The 90% balance (Stage-90) is still invisible and never actually collected.**
+`createStage90` writes the balance straight to `VERIFIED` and the page only ever queries Stage 10. ~90% of every order's money has no tracking, verification, or view anywhere. This is unchanged from v1 and remains the single biggest gap — the page is a 10%-advance tool, not a payments tool.
+→ _Add a balance/Stage-90 view (due / collected / outstanding) and a real collect-or-verify action, or explicitly model the balance as COD with a collection status._
 
-**H2 — No transaction reference shown for reconciliation.**
-The Stage-10 `Payment` carries `tr` (transaction ref), `tn`, `upiLink`, and `amount`, but `PendingPaymentResponse` exposes only `paymentId`, `paymentStatus`, `paymentAmount`. The verify modal even asks the admin for a "UTR number," yet never shows the **system's expected `tr`** to match against. An admin verifying an offline UPI payment has nothing to reconcile against — they're approving blind.
-→ _Recommendation: include `tr`, `upiLink`, and `amount` in the pending-payment DTO and display them in the verify modal._
+**H2 (NEW) — The UI claims the UTR is stored on the payment record, but it isn't.**
+The modal states: _"The UTR will be stored on the payment record for reconciliation."_ In reality `paymentService.verifyPayment(orderId, utr)` sends the UTR as the order-status `notes`, which lands in the order's `statusHistory` (sanitized) — `verifyStage10` only sets `verifiedBy`/`verifiedAt` and **never persists the UTR on the `Payment` entity**. So the reconciliation reference the operator carefully types is disconnected from the payment it reconciles, and the UI's promise is false. This is both the old M3 gap **and** a correctness/trust defect.
+→ _Add a `utr`/reference field to the `Payment` model and a verify path that stores it (e.g. pass the reference into `verifyStage10`), or correct the modal copy to say where it's actually recorded._
 
 ### 🟠 MEDIUM
 
-**M1 — Expiry is not surfaced; expired items error out.**
-Stage-10 payments expire after 24h and `verifyStage10` throws `"… has expired"` past that. The page shows no expiry time, countdown, or warning, so an admin can click Verify on an effectively-dead payment and get a confusing error — or the cron silently cancels it first and it vanishes from the list with no audit trail.
-→ _Recommendation: add an "Expires" column / countdown; disable or flag expired rows; show why a row disappeared (auto-cancelled)._
+**M1 — Verify is still hard-coupled to order confirmation; no reject/fail/dispute.**
+"Verify" === confirm the order. There's no way to verify a payment without confirming, to **reject / mark a payment failed**, or to flag a dispute. The only action is approve-and-confirm.
+→ _Add explicit Verify / Reject actions; ideally a dedicated payment endpoint decoupled from the order status machine._
 
-**M2 — Verification is hard-coupled to order confirmation.**
-"Verify" === `POST status CONFIRMED`. There is no way to (a) verify a payment without confirming the order, (b) **reject / mark failed** a payment, or (c) record a dispute. The only path is approve-and-confirm. If the order isn't in `PENDING` (concurrent change), the call fails.
-→ _Recommendation: add explicit Verify / Reject actions; consider a dedicated payment-verify endpoint decoupled from the status machine._
+**M2 — No UTR ↔ expected-`tr` matching.**
+The modal shows the expected `tr` and asks for the buyer's UTR but does nothing with the relationship — no soft compare, no warning on mismatch. Verification is entirely trust-based.
+→ _Surface a soft match/mismatch indicator when the entered reference doesn't relate to the expected `tr`._
 
-**M3 — The entered UTR/notes don't attach to the payment.**
-The modal's "Verification notes / UTR" is sent as `notes` and lands only in the order's `statusHistory` (sanitized). The `Payment` record stores `verifiedBy`/`verifiedAt` but **not** the reference the admin typed. Reconciliation evidence is therefore disconnected from the payment entity.
-→ _Recommendation: persist the UTR/reference on the Payment record._
+**M3 — Loads all pending orders; no server-side paging / filter / search.**
+`listPendingPayments` still uses `Pageable.unpaged()`; the page paginates client-side (10/pg) and the KPIs sum the whole set. No filter by date, amount, buyer, or urgency. Fine at low volume; doesn't scale and offers no triage for a large queue.
+→ _Server-side pagination + filters (date range, buyer, amount, "expiring soon")._
 
-**M4 — Loads all pending orders; no server-side paging/filter/search.**
-`listPendingPayments` calls `findByStatus("PENDING", Pageable.unpaged())` and the page paginates client-side. There's no date range, amount, or buyer filter. Fine at low volume, but it loads the entire pending set every open and offers no way to triage a large queue.
-→ _Recommendation: server-side pagination + filters (date, buyer, amount)._
+**M4 — No payments history / audit view.**
+Once verified the row leaves the queue; once a Stage-10 payment expires the cron cancels the order and it disappears within ≤1h. There is no view of verified / expired / failed payments for audit or finance reconciliation. The "Expired" tag is therefore transient — visible only in the gap between expiry and the next cron run.
+→ _A payments history tab (verified / expired / cancelled) with the stored references._
 
-**M5 — No "expired / failed payments" audit view.**
-Once a payment expires and the order is auto-cancelled, it leaves the queue with no dashboard record that a payment failed. There's no way to review historical/failed/expired payments.
-→ _Recommendation: a payments history/audit tab (verified, expired, cancelled)._
+### 🟡 LOW
 
-**M6 — Orders with no Stage-10 record are shown but can't be verified.**
-`toPendingPayment` tolerates a null payment (`paymentStatus` → shown as "AWAITING"), but clicking Verify then calls `verifyStage10`, which throws `"Stage 10 payment not found"`. The row looks actionable but isn't.
-→ _Recommendation: detect missing payment and disable/relabel the action._
-
-### 🟡 LOW / UX
-
-**L1 — No buyer contact.** The DTO has `buyerCompanyName` but no phone/email, so an admin can't quickly chase a buyer about a pending advance. (The buyer snapshot has a phone; it just isn't surfaced.)
-
-**L2 — No summary KPIs.** No count of pending verifications, total advance due, or total pending order value at the top of the page.
-
-**L3 — No manual refresh / auto-refresh.** The original plan called for an "auto-refreshing list"; today the page only refetches after a successful verify. A queue that others are working can go stale.
-
-**L4 — Advance vs total not labelled.** "Payment Amount" (the 10% advance) sits next to "Order Total" with no indication that the former is a 10% advance — easy to misread.
-
-**L5 — No invoice / payment-link access.** No way to open the order's invoice PDF or copy the UPI link from this page.
+- **L1 — Verify modal doesn't re-check freshness.** Auto-refresh updates the list, but a modal opened on a row that expires (or gets cron-cancelled) while open will still attempt to verify and fail with a backend error. Minor; the error is handled.
+- **L2 — No invoice access from the page.** Can't open the order's invoice PDF here (only "View" → order detail).
+- **L3 — KPI accuracy is tied to M3.** Because the endpoint is unpaged, the KPIs are currently accurate across all pending — but they'd silently become page-scoped the moment server pagination is introduced. Worth keeping in mind when M3 is done.
 
 ---
 
-## What works well (so it's not all gaps)
+## What works well
 
-- The page is correctly **admin-only** (route guard + `/admin/**` security rule), and the verify endpoint re-checks `ROLE_ADMIN`.
-- Verification is **atomic**: marking the payment `VERIFIED` and confirming the order happen in one transactional call, and `verifyStage10` guards against double-verification and expiry.
-- Buyer company, order total, and advance amount are shown; the verify modal confirms before acting.
+- Correctly **admin-only** (route guard + `/admin/**` rule; verify endpoint re-checks `ROLE_ADMIN`).
+- Verification is **atomic** and guards against double-verify and expiry.
+- The reconciliation/expiry/KPI/refresh UX added since v1 is solid and operator-friendly.
 
 ---
 
@@ -79,14 +74,11 @@ Once a payment expires and the order is auto-cancelled, it leaves the queue with
 
 | # | Gap | Severity | Effort |
 |---|-----|----------|--------|
-| H2 | Show `tr`/UPI/amount for reconciliation | High | Small (DTO + modal) |
-| M3 | Persist UTR onto the payment record | Medium | Small |
-| M1 | Surface expiry + disable expired rows | Medium | Small |
-| L1–L4 | Buyer contact, KPIs, refresh, labels | Low | Small |
-| M6 | Handle missing-payment rows | Medium | Small |
-| M2 | Decouple verify from confirm; add reject | Medium | Medium |
-| M4 | Server-side paging/filters | Medium | Medium |
-| M5 | Payments history/audit view | Medium | Medium |
+| H2 | Actually persist the UTR on the payment (or fix the copy) | High | Small |
+| M1 | Decouple verify from confirm; add Reject | Medium | Medium |
+| M2 | UTR ↔ expected-`tr` match indicator | Medium | Small |
+| M3 | Server-side paging + filters | Medium | Medium |
+| M4 | Payments history / audit view | Medium | Medium |
 | H1 | Stage-90 balance tracking & collection | High | Large |
 
-**Highest value, lowest effort first:** H2 + M3 + M1 (reconciliation + expiry) materially de-risk the verify action with small, mostly-DTO changes. **H1 (the 90% balance)** is the biggest gap overall but is a larger design effort because the backend currently treats the balance as auto-collected.
+**Do first:** H2 — it's small and it's a live correctness/trust problem (the operator is told the reference is saved when it isn't). **Biggest overall:** H1 (the 90% balance), which needs a backend design change because the balance is currently auto-marked collected.
