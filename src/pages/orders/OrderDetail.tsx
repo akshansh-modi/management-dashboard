@@ -22,7 +22,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useAuth } from '../../context/AuthContext';
 import { orderService } from '../../services/orderService';
-import type { Order, OrderItem, OrderStatus } from '../../types';
+import type { Order, OrderItem, OrderStatus, OrderPayments } from '../../types';
 import { STATUS_TAG } from './OrderList';
 
 const { Title, Text } = Typography;
@@ -48,6 +48,7 @@ export default function OrderDetail() {
   const { message } = App.useApp();
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [payments, setPayments] = useState<OrderPayments | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,7 +61,15 @@ export default function OrderDetail() {
     setLoading(true);
     setError(null);
     try {
-      setOrder(await orderService.getById(orderId));
+      const orderData = await orderService.getById(orderId);
+      setOrder(orderData);
+      
+      try {
+        const paymentsData = await orderService.getPayments(orderId);
+        setPayments(paymentsData);
+      } catch (err) {
+        console.error('Failed to load order payments', err);
+      }
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
       setError(err?.response?.data?.message || err?.message || 'Failed to load order');
@@ -80,7 +89,7 @@ export default function OrderDetail() {
       if (isAdmin) {
         await orderService.adminUpdateStatus(order.orderId, transition, notes || undefined);
       } else {
-        await orderService.updateStatus(order.orderId, transition);
+        await orderService.updateStatus(order.orderId, transition, notes || undefined);
       }
       message.success(`Order marked ${transition}`);
       setTransition(null);
@@ -271,6 +280,49 @@ export default function OrderDetail() {
             )}
           </div>
 
+          {/* Payments Card */}
+          {payments && payments.stages && payments.stages.length > 0 && (
+            <div className="chart-card" style={{ marginBottom: 20 }}>
+              <Title level={5} style={{ marginTop: 0, marginBottom: 16 }}>Payments</Title>
+              {payments.stages.map((stage, index) => (
+                <div key={stage.stage} style={{ marginBottom: index === payments.stages.length - 1 ? 0 : 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text strong>{stage.label} ({stage.percentOfTotal}%)</Text>
+                    <Tag color={stage.status === 'VERIFIED' ? 'green' : stage.status === 'PENDING' ? 'gold' : 'red'}>
+                      {stage.status}
+                    </Tag>
+                  </div>
+                  <div style={{ marginTop: 4 }}>
+                    <Title level={4} style={{ margin: 0 }}>{inr(stage.amount)}</Title>
+                  </div>
+                  <Descriptions column={1} size="small" style={{ marginTop: 8 }} labelStyle={{ color: '#8C8C8C' }}>
+                    {stage.tr && (
+                      <Descriptions.Item label="UPI Ref">
+                        <Text copyable>{stage.tr}</Text>
+                      </Descriptions.Item>
+                    )}
+                    {stage.utr && (
+                      <Descriptions.Item label={stage.stage === '10' ? 'Buyer UTR' : 'Reference'}>
+                        <Text copyable>{stage.utr}</Text>
+                      </Descriptions.Item>
+                    )}
+                    {stage.method && <Descriptions.Item label="Method">{stage.method}</Descriptions.Item>}
+                    {stage.verifiedAt && <Descriptions.Item label="Verified At">{dayjs(stage.verifiedAt).format('DD MMM YYYY, HH:mm')}</Descriptions.Item>}
+                    {stage.verifiedBy && <Descriptions.Item label="Verified By">{stage.verifiedBy}</Descriptions.Item>}
+                  </Descriptions>
+                  {stage.stage === '10' && stage.status === 'PENDING' && stage.upiLink && (
+                    <div style={{ marginTop: 8 }}>
+                      <Button type="link" size="small" href={stage.upiLink} target="_blank" style={{ padding: 0 }}>
+                        Open UPI Payment Link
+                      </Button>
+                    </div>
+                  )}
+                  {index < payments.stages.length - 1 && <Divider style={{ margin: '16px 0' }} />}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="chart-card">
             <Title level={5} style={{ marginTop: 0 }}>Shipping address</Title>
             {order.shippingAddress ? (
@@ -305,10 +357,10 @@ export default function OrderDetail() {
             ? 'Confirming will verify the advance payment for this order.'
             : `This will move the order to ${transition}.`}
         </Text>
-        {isAdmin && (
+        {(isAdmin || isSeller) && (
           <TextArea
             rows={3}
-            placeholder="Optional note (recorded in status history)"
+            placeholder={transition === 'CONFIRMED' ? 'Enter UTR/payment reference' : 'Optional note (recorded in status history)'}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             style={{ marginTop: 12 }}

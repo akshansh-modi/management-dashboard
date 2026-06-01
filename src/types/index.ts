@@ -170,6 +170,8 @@ export interface AnalyticsSummary {
 
 export type Role = 'buyer' | 'seller' | 'admin';
 
+export type AccountStatus = 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED';
+
 export interface AdminUser {
   userId: string;
   username?: string;
@@ -182,6 +184,10 @@ export interface AdminUser {
   pan?: string;
   stateCode?: string;
   address?: Address;
+  /**
+   * Onboarding status. Null/undefined = legacy user (treat as APPROVED).
+   */
+  accountStatus?: AccountStatus | null;
 }
 
 // ── Buyer analytics ──────────────────────────────────────────────────────────
@@ -314,3 +320,25 @@ export interface BalancePayment {
   orderDate?: string;
   deliveredAt?: string;
 }
+
+export interface StagePayment {
+  stage: string;
+  label: string;
+  amount?: number;
+  percentOfTotal?: number;
+  status?: string;
+  tr?: string;
+  upiLink?: string;
+  utr?: string;
+  method?: string;
+  verifiedBy?: string;
+  verifiedAt?: string;
+  createdAt?: string;
+  expiresAt?: string;
+}
+
+export interface OrderPayments {
+  orderId: string;
+  stages: StagePayment[];
+}
+

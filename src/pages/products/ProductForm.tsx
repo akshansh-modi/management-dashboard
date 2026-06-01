@@ -50,6 +50,7 @@ interface FormValues {
   warranty?: string;
   supportDetails?: string;
   isActive: boolean;
+  technicalSpecs?: Array<{ key: string; value: string }>;
   variantAttributes?: string[];
   variants?: VariantRow[];
 }
@@ -73,8 +74,7 @@ export default function ProductForm() {
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
   const variantAttributes: string[] = Form.useWatch('variantAttributes', form) || [];
-  const watchedVariants = Form.useWatch('variants', form);
-  const hasVariants = Array.isArray(watchedVariants) && watchedVariants.length > 0;
+  const hasVariants = variantAttributes.length > 0;
 
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -123,6 +123,10 @@ export default function ProductForm() {
             warranty: product.warranty,
             supportDetails: product.supportDetails,
             isActive: product.isActive !== false,
+            technicalSpecs: Object.entries(product.attributes ?? {}).map(([k, v]) => ({
+              key: k,
+              value: String(v),
+            })),
             variantAttributes: product.variantAttributes ?? [],
             variants: (product.variants ?? []).map((v) => ({
               variantId: v.variantId,
@@ -174,20 +178,43 @@ export default function ProductForm() {
       };
       if (isAdmin && values.sellerId) payload.sellerId = values.sellerId;
 
+      // Product Specs (Attributes)
+      const attributesRecord: Record<string, string> = {};
+      (values.technicalSpecs ?? []).forEach((spec) => {
+        if (spec.key?.trim() && spec.value?.trim()) {
+          attributesRecord[spec.key.trim()] = spec.value.trim();
+        }
+      });
+      payload.attributes = attributesRecord;
+
       // Variants — each carries its own price/stock/heading. A blank heading is
       // sent as undefined so the backend re-derives the default from attributes.
       payload.variantAttributes = values.variantAttributes ?? [];
-      const variantList = (values.variants ?? []).map((v) => ({
-        variantId: v.variantId,
-        sku: v.sku,
-        heading: v.heading?.trim() ? v.heading.trim() : undefined,
-        price: v.price,
-        stockQuantity: v.stockQuantity,
-        gstRate: v.gstRate,
-        isActive: v.isActive ?? true,
-        attributes: v.attributes ?? {},
-      }));
-      if (variantList.length) payload.variants = variantList;
+      if (hasVariants) {
+        const variantList = (values.variants ?? []).map((v) => ({
+          variantId: v.variantId,
+          sku: v.sku,
+          heading: v.heading?.trim() ? v.heading.trim() : undefined,
+          price: v.price,
+          stockQuantity: v.stockQuantity,
+          gstRate: v.gstRate,
+          isActive: v.isActive ?? true,
+          attributes: v.attributes ?? {},
+        }));
+        if (variantList.length) payload.variants = variantList;
+      } else {
+        payload.variants = [
+          {
+            variantId: values.variants?.[0]?.variantId, // preserve existing variantId if present
+            sku: values.sku,
+            price: values.price,
+            stockQuantity: values.stockQuantity ?? 0,
+            gstRate: values.gstRate ?? 18,
+            isActive: values.isActive,
+            attributes: {},
+          },
+        ];
+      }
 
       if (isEdit && productId) {
         await productService.update(productId, payload);
@@ -396,6 +423,49 @@ export default function ProductForm() {
             </Col>
           </Row>
 
+          <Divider style={{ marginTop: 8 }}>Product Specifications (Attributes)</Divider>
+          <Form.List name="technicalSpecs">
+            {(fields, { add, remove }) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Row gutter={12} key={key} style={{ display: 'flex', alignItems: 'center' }}>
+                    <Col xs={11}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'key']}
+                        rules={[{ required: true, message: 'Missing specification name' }]}
+                        noStyle
+                      >
+                        <Input placeholder="Spec key (e.g. Pump Type)" />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={11}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'value']}
+                        rules={[{ required: true, message: 'Missing specification value' }]}
+                        noStyle
+                      >
+                        <Input placeholder="Spec value (e.g. Centrifugal)" />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={2} style={{ textAlign: 'right' }}>
+                      <Button
+                        type="text"
+                        danger
+                        icon={<MinusCircleOutlined />}
+                        onClick={() => remove(name)}
+                      />
+                    </Col>
+                  </Row>
+                ))}
+                <Button type="dashed" onClick={() => add()} icon={<PlusOutlined />} style={{ maxWidth: 220 }}>
+                  Add specification
+                </Button>
+              </div>
+            )}
+          </Form.List>
+
           <Divider style={{ marginTop: 8 }}>Variants</Divider>
           <Form.Item
             name="variantAttributes"
@@ -411,98 +481,100 @@ export default function ProductForm() {
             />
           </Form.Item>
 
-          <Form.List name="variants">
-            {(fields, { add, remove }) => (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-                {fields.map(({ key, name, ...restField }) => (
-                  <Card
-                    key={key}
-                    size="small"
-                    style={{ background: '#FAFBFC' }}
-                    title={`Variant ${name + 1}`}
-                    extra={
-                      <Button
-                        type="text"
-                        danger
-                        icon={<MinusCircleOutlined />}
-                        onClick={() => remove(name)}
-                      />
-                    }
-                  >
-                    <Row gutter={12}>
-                      <Col xs={24} md={8}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'heading']}
-                          label="Heading (optional)"
-                          tooltip="Leave blank to auto-generate from the attribute values"
-                        >
-                          <Input placeholder="Auto from attributes if blank" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={8}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'sku']}
-                          label="SKU"
-                          rules={[{ required: true, message: 'SKU required' }]}
-                        >
-                          <Input placeholder="Variant SKU" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={12} md={4}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'price']}
-                          label="Price (₹)"
-                          rules={[{ required: true, message: 'Required' }]}
-                        >
-                          <InputNumber min={0} style={{ width: '100%' }} />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={12} md={4}>
-                        <Form.Item {...restField} name={[name, 'stockQuantity']} label="Qty">
-                          <InputNumber min={0} style={{ width: '100%' }} />
-                        </Form.Item>
-                      </Col>
-
-                      {variantAttributes.map((attrKey) => (
-                        <Col xs={12} md={6} key={attrKey}>
-                          <Form.Item {...restField} name={[name, 'attributes', attrKey]} label={attrKey}>
-                            <Input placeholder={attrKey} />
+          {hasVariants && (
+            <Form.List name="variants">
+              {(fields, { add, remove }) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                  {fields.map(({ key, name, ...restField }) => (
+                    <Card
+                      key={key}
+                      size="small"
+                      style={{ background: '#FAFBFC' }}
+                      title={`Variant ${name + 1}`}
+                      extra={
+                        <Button
+                          type="text"
+                          danger
+                          icon={<MinusCircleOutlined />}
+                          onClick={() => remove(name)}
+                        />
+                      }
+                    >
+                      <Row gutter={12}>
+                        <Col xs={24} md={8}>
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'heading']}
+                            label="Heading (optional)"
+                            tooltip="Leave blank to auto-generate from the attribute values"
+                          >
+                            <Input placeholder="Auto from attributes if blank" />
                           </Form.Item>
                         </Col>
-                      ))}
+                        <Col xs={24} md={8}>
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'sku']}
+                            label="SKU"
+                            rules={[{ required: true, message: 'SKU required' }]}
+                          >
+                            <Input placeholder="Variant SKU" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={12} md={4}>
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'price']}
+                            label="Price (₹)"
+                            rules={[{ required: true, message: 'Required' }]}
+                          >
+                            <InputNumber min={0} style={{ width: '100%' }} />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={12} md={4}>
+                          <Form.Item {...restField} name={[name, 'stockQuantity']} label="Qty">
+                            <InputNumber min={0} style={{ width: '100%' }} />
+                          </Form.Item>
+                        </Col>
 
-                      <Col xs={12} md={4}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'gstRate']}
-                          label="GST %"
-                        >
-                          <InputNumber min={0} max={28} style={{ width: '100%' }} />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={12} md={4}>
-                        <Form.Item
-                          {...restField}
-                          name={[name, 'isActive']}
-                          label="Active"
-                          valuePropName="checked"
-                          initialValue={true}
-                        >
-                          <Switch size="small" />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                  </Card>
-                ))}
-                <Button type="dashed" onClick={() => add({ isActive: true })} icon={<PlusOutlined />} block>
-                  Add variant
-                </Button>
-              </div>
-            )}
-          </Form.List>
+                        {variantAttributes.map((attrKey) => (
+                          <Col xs={12} md={6} key={attrKey}>
+                            <Form.Item {...restField} name={[name, 'attributes', attrKey]} label={attrKey}>
+                              <Input placeholder={attrKey} />
+                            </Form.Item>
+                          </Col>
+                        ))}
+
+                        <Col xs={12} md={4}>
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'gstRate']}
+                            label="GST %"
+                          >
+                            <InputNumber min={0} max={28} style={{ width: '100%' }} />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={12} md={4}>
+                          <Form.Item
+                            {...restField}
+                            name={[name, 'isActive']}
+                            label="Active"
+                            valuePropName="checked"
+                            initialValue={true}
+                          >
+                            <Switch size="small" />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </Card>
+                  ))}
+                  <Button type="dashed" onClick={() => add({ isActive: true })} icon={<PlusOutlined />} block>
+                    Add variant
+                  </Button>
+                </div>
+              )}
+            </Form.List>
+          )}
 
           <Space>
             <Button onClick={() => navigate('/products')}>Cancel</Button>

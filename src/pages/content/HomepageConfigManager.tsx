@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Form, Button, Select, Switch, Card, Typography, message, Space, Empty, Alert, Badge } from 'antd';
 import { 
   PlusOutlined, 
@@ -29,7 +29,25 @@ export default function HomepageConfigManager() {
   const [carousels, setCarousels] = useState<Carousel[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [categories, setCategories] = useState<(Category & { displayName?: string })[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
+  // Products: populated by typeahead search, NOT a full 1000-item load.
+  const [productOptions, setProductOptions] = useState<Product[]>([]);
+  const [productSearching, setProductSearching] = useState(false);
+  const productDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const searchProducts = useCallback(async (term: string) => {
+    if (productDebounceRef.current) clearTimeout(productDebounceRef.current);
+    productDebounceRef.current = setTimeout(async () => {
+      setProductSearching(true);
+      try {
+        const page = await productService.listAll(0, 20, term || undefined);
+        setProductOptions(page.content || []);
+      } catch {
+        // silently ignore typeahead errors
+      } finally {
+        setProductSearching(false);
+      }
+    }, 300);
+  }, []);
 
   // Helper to flatten category tree and construct hierarchical names
   const flattenCategories = (cats: Category[], parentName = ''): any[] => {
@@ -50,18 +68,20 @@ export default function HomepageConfigManager() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [configData, carouselsData, brandsData, categoriesTree, productsPage] = await Promise.all([
-        homepageConfigService.get().catch(() => ({})), // Ignore error if no config exists
+      const [configData, carouselsData, brandsData, categoriesTree] = await Promise.all([
+        homepageConfigService.get().catch(() => ({})),
         carouselService.getAll(),
         brandService.getAll(),
         categoryService.getTree(),
-        productService.listAll(0, 1000), // Fetch up to 1000 products for the dropdown
+        // Products are loaded on-demand via typeahead — no big page fetch here.
       ]);
 
       setCarousels(carouselsData);
       setBrands(brandsData);
       setCategories(flattenCategories(categoriesTree));
-      setProducts(productsPage.content || []);
+      // Seed initial product list so pre-selected product IDs render with names.
+      const initialProducts = await productService.listAll(0, 20);
+      setProductOptions(initialProducts.content || []);
       
       const formattedConfig = {
         carouselIds: configData.carousels?.map((c: Carousel) => c.carouselId) || [],
@@ -402,16 +422,16 @@ export default function HomepageConfigManager() {
                                 }));
                                 placeholder = "Select categories to display...";
                               } else if (cardType === 'FEATURED_PRODUCTS' || cardType === 'FEATURED_OFFERS') {
-                                options = products.map(p => ({
+                                options = productOptions.map(p => ({
                                   label: p.productName,
                                   value: p.productId,
                                   desc: (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
                                       {p.productImagesUrl?.[0] ? (
-                                        <img 
-                                          src={p.productImagesUrl[0]} 
-                                          alt={p.productName} 
-                                          style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid #f0f0f0' }} 
+                                        <img
+                                          src={p.productImagesUrl[0]}
+                                          alt={p.productName}
+                                          style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid #f0f0f0' }}
                                           referrerPolicy="no-referrer"
                                         />
                                       ) : (
@@ -426,7 +446,29 @@ export default function HomepageConfigManager() {
                                     </div>
                                   )
                                 }));
-                                placeholder = cardType === 'FEATURED_PRODUCTS' ? "Select products to showcase..." : "Select special offer products...";
+                                placeholder = cardType === 'FEATURED_PRODUCTS' ? "Search & select products..." : "Search & select offer products...";
+
+                                return (
+                                  <Form.Item
+                                    {...restField}
+                                    name={[name, 'ids']}
+                                    label={<span style={{ fontWeight: 600, fontSize: 12 }}>Configure Items List</span>}
+                                    style={{ marginBottom: 0 }}
+                                    rules={[{ required: true, message: 'Please select at least one item' }]}
+                                  >
+                                    <Select
+                                      mode="multiple"
+                                      placeholder={placeholder}
+                                      options={options}
+                                      style={{ width: '100%', borderRadius: 6 }}
+                                      showSearch
+                                      filterOption={false}
+                                      loading={productSearching}
+                                      onSearch={searchProducts}
+                                      optionRender={(option: any) => option.data.desc || option.data.label}
+                                    />
+                                  </Form.Item>
+                                );
                               }
 
                               return (
@@ -437,9 +479,9 @@ export default function HomepageConfigManager() {
                                   style={{ marginBottom: 0 }}
                                   rules={[{ required: true, message: 'Please select at least one item' }]}
                                 >
-                                  <Select 
-                                    mode="multiple" 
-                                    placeholder={placeholder} 
+                                  <Select
+                                    mode="multiple"
+                                    placeholder={placeholder}
                                     options={options}
                                     style={{ width: '100%', borderRadius: 6 }}
                                     showSearch

@@ -35,3 +35,10 @@
 - [x] **UserManager.tsx**: Create screen for viewing users and switching user roles.
 - [x] **Users Routing**: Add `/users` route under RoleGuard inside `router/index.tsx`.
 - [x] **Security Hardening**: Secure password hashing with `@JsonIgnore`, protect `/products/seller/**` GET endpoint, and configure `application.properties` to suppress error messages/stacktraces.
+
+## 🚨 Detailed System Activity Diagram
+- [ ] **Define Diagram Scope**: Map out swimlanes for Buyer, Seller, Admin, and System.
+- [ ] **Develop Detailed Mermaid Workflow**: Cover Happy Path, Expiry/Cron Cancellation, and Order Cancellations.
+
+
+

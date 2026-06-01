@@ -1,15 +1,15 @@
-# Current State & Thoughts
+# Design Plan: Detailed System Activity Diagram
 
-- **Phase 1** (Brands & Categories) is successfully implemented and tested on the frontend. The `BrandManager` and `CategoryManager` use standard Ant Design components.
-- **Auth & Layout** issues (CORS, Mobile Sidebar layout, Username login) have been resolved.
-- **Next Up**: Phase 2: Platform Monetization & Incentives (Discount Policies & Tier Management).
+We will build a detailed Mermaid diagram that maps the key actors and operations across all business scenarios.
 
-## Phase 2 Focus
-- Admins and Sellers need a way to manage discount policies (e.g. 5% off at 10 items).
-- The `DiscountPolicyManager.tsx` will need a table to list policies and a modal to create/edit them.
-- We need to wire up `discountPolicyService.ts` to `POST /discount-policies` and `PUT /discount-policies/{id}`.
+## 1. Actors & Systems
+* **Buyer**: Performs catalog checkout, initiates UPI payment, enters UTR reference.
+* **Seller**: Fulfills orders, edits inventory/products, updates transition states.
+* **Admin**: Verifies payments (Stage-10 and Stage-90), manages system users, configurations.
+* **System (Cron/Backend)**: Handles calculations, expiry timers, automated status history logging.
 
-### Open Questions / Immediate actions:
-- I need to check the backend `DiscountPolicyController.java` to confirm the exact endpoints available (`GET /discount-policies`, etc.).
-- Update `tasks.md` and `context.md` to reflect the completed Phase 1 and the upcoming Phase 2.
-- Then, propose an implementation plan for Phase 2.
+## 2. Scenarios to Cover
+1. **Scenario A (Happy Path)**: Checkout -> Stage-10 payment -> Admin/Seller UTR match -> Confirmation -> Fulfillment -> Stage-90 creation -> Balance matching -> Completion.
+2. **Scenario B (Timeout & Auto-Expiry)**: Checkout -> Stage-10 payment -> No payment in 24 hours -> Hourly cron cancels order and expires payment.
+3. **Scenario C (Cancellation Path)**: Seller or Admin cancels the order before fulfillment due to lack of stock or dispute.
+4. **Scenario D (Dynamic Catalog Setup)**: Seller adds simple vs variant product, adding specifications (attributes).

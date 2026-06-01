@@ -1,5 +1,5 @@
 import api from './api';
-import type { Page, Order, OrderStatus } from '../types';
+import type { Page, Order, OrderStatus, OrderPayments } from '../types';
 
 /**
  * Order API. Admins see every order via /admin/orders; sellers see only orders
@@ -29,6 +29,11 @@ export const orderService = {
     return data;
   },
 
+  getPayments: async (orderId: string): Promise<OrderPayments> => {
+    const { data } = await api.get<OrderPayments>(`/orders/${orderId}/payments`);
+    return data;
+  },
+
   /** Admin status transition (records statusHistory + payment side-effects). */
   adminUpdateStatus: async (orderId: string, status: OrderStatus, notes?: string): Promise<Order> => {
     const { data } = await api.post<Order>(`/orders/${orderId}/status`, { status, notes });
@@ -36,8 +41,8 @@ export const orderService = {
   },
 
   /** Seller status transition. */
-  updateStatus: async (orderId: string, status: OrderStatus): Promise<Order> => {
-    const { data } = await api.patch<Order>(`/orders/${orderId}/status`, { status });
+  updateStatus: async (orderId: string, status: OrderStatus, notes?: string): Promise<Order> => {
+    const { data } = await api.patch<Order>(`/orders/${orderId}/status`, { status, notes });
     return data;
   },
 };

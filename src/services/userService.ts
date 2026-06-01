@@ -5,10 +5,15 @@ import type { Page, AdminUser, Role, BuyerAnalytics, Order } from '../types';
  * Admin user-management API. Admin-only on the backend (/admin/**).
  */
 export const userService = {
-  list: async (params: { role?: Role; page?: number; size?: number } = {}): Promise<Page<AdminUser>> => {
-    const { role, page = 0, size = 20 } = params;
+  list: async (params: { role?: Role; status?: string; page?: number; size?: number } = {}): Promise<Page<AdminUser>> => {
+    const { role, status, page = 0, size = 20 } = params;
     const { data } = await api.get<Page<AdminUser>>('/admin/users', {
-      params: { ...(role ? { role } : {}), page, size },
+      params: {
+        ...(role ? { role } : {}),
+        ...(status ? { status } : {}),
+        page,
+        size,
+      },
     });
     return data;
   },
@@ -20,6 +25,12 @@ export const userService = {
 
   changeRole: async (userId: string, role: Role): Promise<AdminUser> => {
     const { data } = await api.patch<AdminUser>(`/admin/users/${userId}/role`, { role });
+    return data;
+  },
+
+  /** Approve or reject a buyer account. */
+  changeAccountStatus: async (userId: string, status: 'APPROVED' | 'REJECTED'): Promise<AdminUser> => {
+    const { data } = await api.patch<AdminUser>(`/admin/users/${userId}/status`, { status });
     return data;
   },
 
