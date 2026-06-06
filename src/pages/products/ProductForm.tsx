@@ -15,6 +15,7 @@ import {
   Card,
   Divider,
   App,
+  Upload,
 } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
 
@@ -29,6 +30,8 @@ import { useAuth } from '../../context/AuthContext';
 import { productService } from '../../services/productService';
 import { userService } from '../../services/userService';
 import type { Product, Brand, Category, DiscountPolicy, AdminUser } from '../../types';
+import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
+import { uploadService } from '../../services/uploadService';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -83,6 +86,11 @@ export default function ProductForm() {
   const [policies, setPolicies] = useState<DiscountPolicy[]>([]);
   const [sellers, setSellers] = useState<AdminUser[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [manualUrl, setManualUrl] = useState('');
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
 
   // Load reference data (and the product itself when editing)
   useEffect(() => {
@@ -141,6 +149,16 @@ export default function ProductForm() {
               attributes: v.attributes ?? {},
             })),
           });
+
+          const urls = product.productImagesUrl ?? [];
+          setFileList(
+            urls.map((url, idx) => ({
+              uid: `existing-${idx}`,
+              name: url.split('/').pop() || `Image ${idx + 1}`,
+              status: 'done',
+              url: url,
+            }))
+          );
         }
       } catch (e) {
         const err = e as { response?: { data?: { message?: string } }; message?: string };
@@ -153,6 +171,76 @@ export default function ProductForm() {
       cancelled = true;
     };
   }, [isEdit, productId, isAdmin, form]);
+
+  const handleCustomUpload: UploadProps['customRequest'] = async (options) => {
+    const { file, onSuccess, onError } = options;
+    setUploading(true);
+    try {
+      const url = await uploadService.uploadImage(file as File, 'products');
+      const currentUrls = form.getFieldValue('productImagesUrl') || [];
+      const newUrls = [...currentUrls, url];
+      form.setFieldValue('productImagesUrl', newUrls);
+
+      setFileList((prev) => [
+        ...prev,
+        {
+          uid: String(Date.now()),
+          name: (file as File).name,
+          status: 'done',
+          url: url,
+        },
+      ]);
+      onSuccess?.('ok');
+      message.success('Image uploaded successfully');
+    } catch (err) {
+      message.error('Image upload failed');
+      onError?.(err as Error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleAddManualUrl = () => {
+    if (!manualUrl.trim()) return;
+    const url = manualUrl.trim();
+    const currentUrls = form.getFieldValue('productImagesUrl') || [];
+    const newUrls = [...currentUrls, url];
+    form.setFieldValue('productImagesUrl', newUrls);
+    
+    setFileList((prev) => [
+      ...prev,
+      {
+        uid: `manual-${Date.now()}`,
+        name: url.split('/').pop() || `Image ${newUrls.length}`,
+        status: 'done',
+        url: url,
+      },
+    ]);
+    setManualUrl('');
+    message.success('Image URL added');
+  };
+
+  const uploadProps: UploadProps = {
+    customRequest: handleCustomUpload,
+    fileList,
+    onRemove: (file) => {
+      const urlToRemove = file.url;
+      const currentUrls = form.getFieldValue('productImagesUrl') || [];
+      const newUrls = currentUrls.filter((u: string) => u !== urlToRemove);
+      form.setFieldValue('productImagesUrl', newUrls);
+      setFileList((prev) => prev.filter((item) => item.uid !== file.uid));
+    },
+    accept: 'image/*',
+    listType: 'picture-card',
+  };
+
+  const handleSaveWithActiveStatus = (isActive: boolean) => {
+    setIsDraftSaving(!isActive);
+    form.setFieldValue('isActive', isActive);
+    setTimeout(() => {
+      form.submit();
+    }, 0);
+  };
 
   const onFinish = async (values: FormValues) => {
     setSaving(true);
@@ -291,7 +379,7 @@ export default function ProductForm() {
               <Form.Item
                 name="sku"
                 label="SKU"
-                rules={[{ required: true, message: 'SKU is required' }]}
+                rules={[{ required: !isDraftSaving, message: 'SKU is required' }]}
               >
                 <Input placeholder="Unique stock code" />
               </Form.Item>
@@ -301,7 +389,7 @@ export default function ProductForm() {
               <Form.Item
                 name="productBrandId"
                 label="Brand"
-                rules={[{ required: true, message: 'Select a brand' }]}
+                rules={[{ required: !isDraftSaving, message: 'Select a brand' }]}
               >
                 <Select
                   showSearch
@@ -315,7 +403,7 @@ export default function ProductForm() {
               <Form.Item
                 name="categoryId"
                 label="Category"
-                rules={[{ required: true, message: 'Select a category' }]}
+                rules={[{ required: !isDraftSaving, message: 'Select a category' }]}
               >
                 <Select
                   showSearch
@@ -339,7 +427,7 @@ export default function ProductForm() {
               <Form.Item
                 name="price"
                 label="Price (₹)"
-                rules={[{ required: !hasVariants, message: 'Price is required' }]}
+                rules={[{ required: !isDraftSaving && !hasVariants, message: 'Price is required' }]}
                 tooltip={hasVariants ? 'Ignored while variants exist — variant prices apply' : undefined}
               >
                 <InputNumber min={0} style={{ width: '100%' }} placeholder="0.00" disabled={hasVariants} />
@@ -394,14 +482,33 @@ export default function ProductForm() {
             </Col>
 
             <Col xs={24}>
-              <Form.Item name="productImagesUrl" label="Image URLs">
-                <Select
-                  mode="tags"
-                  tokenSeparators={[',']}
-                  placeholder="Paste an image URL and press Enter"
-                  open={false}
-                  suffixIcon={null}
-                />
+              <Form.Item label="Product Images">
+                <div style={{ background: '#F9FAFB', border: '1px dashed #D1D5DB', borderRadius: 8, padding: 16 }}>
+                  <Upload {...uploadProps}>
+                    <div>
+                      <PlusOutlined />
+                      <div style={{ marginTop: 8 }}>Upload Image</div>
+                    </div>
+                  </Upload>
+                  
+                  <div style={{ marginTop: 16, display: 'flex', gap: 8, maxWidth: 500 }}>
+                    <Input
+                      placeholder="Or paste an image URL..."
+                      value={manualUrl}
+                      onChange={(e) => setManualUrl(e.target.value)}
+                      onPressEnter={(e) => {
+                        e.preventDefault();
+                        handleAddManualUrl();
+                      }}
+                    />
+                    <Button onClick={handleAddManualUrl}>
+                      Add URL
+                    </Button>
+                  </div>
+                </div>
+              </Form.Item>
+              <Form.Item name="productImagesUrl" hidden>
+                <Select mode="tags" />
               </Form.Item>
             </Col>
 
@@ -516,7 +623,7 @@ export default function ProductForm() {
                             {...restField}
                             name={[name, 'sku']}
                             label="SKU"
-                            rules={[{ required: true, message: 'SKU required' }]}
+                            rules={[{ required: !isDraftSaving, message: 'SKU required' }]}
                           >
                             <Input placeholder="Variant SKU" />
                           </Form.Item>
@@ -526,7 +633,7 @@ export default function ProductForm() {
                             {...restField}
                             name={[name, 'price']}
                             label="Price (₹)"
-                            rules={[{ required: true, message: 'Required' }]}
+                            rules={[{ required: !isDraftSaving, message: 'Required' }]}
                           >
                             <InputNumber min={0} style={{ width: '100%' }} />
                           </Form.Item>
@@ -576,10 +683,22 @@ export default function ProductForm() {
             </Form.List>
           )}
 
-          <Space>
+          <Space size="middle">
             <Button onClick={() => navigate('/products')}>Cancel</Button>
-            <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={saving}>
-              {isEdit ? 'Save changes' : 'Create product'}
+            <Button
+              type="default"
+              loading={saving || uploading}
+              onClick={() => handleSaveWithActiveStatus(false)}
+            >
+              Save as draft
+            </Button>
+            <Button
+              type="primary"
+              icon={<SaveOutlined />}
+              loading={saving || uploading}
+              onClick={() => handleSaveWithActiveStatus(true)}
+            >
+              {isEdit ? 'Publish changes' : 'Publish product'}
             </Button>
           </Space>
         </Form>

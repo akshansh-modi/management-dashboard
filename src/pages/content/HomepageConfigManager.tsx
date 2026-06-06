@@ -18,6 +18,7 @@ import { brandService } from '../../services/brandService';
 import { categoryService } from '../../services/categoryService';
 import { productService } from '../../services/productService';
 import type { Carousel, HomepageConfig, Brand, Category, Product } from '../../types';
+import LazyImage from '../../components/LazyImage';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -219,11 +220,14 @@ export default function HomepageConfigManager() {
                 desc: (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
                     {c.imageUrl ? (
-                      <img 
-                        src={c.imageUrl} 
-                        alt={c.title} 
-                        style={{ width: 56, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid #f0f0f0' }} 
+                      <LazyImage
+                        src={c.imageUrl}
+                        alt={c.title}
+                        width={56}
+                        height={32}
+                        objectFit="cover"
                         referrerPolicy="no-referrer"
+                        style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}
                       />
                     ) : (
                       <div style={{ width: 56, height: 32, background: '#f5f5f5', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -382,11 +386,14 @@ export default function HomepageConfigManager() {
                                   desc: (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
                                       {b.brandLogoUrl ? (
-                                        <img 
-                                          src={b.brandLogoUrl} 
-                                          alt={b.brandName} 
-                                          style={{ width: 24, height: 24, objectFit: 'contain', background: '#ffffff', borderRadius: 4, border: '1px solid #f0f0f0', padding: 2 }} 
+                                        <LazyImage
+                                          src={b.brandLogoUrl}
+                                          alt={b.brandName}
+                                          width={24}
+                                          height={24}
+                                          objectFit="contain"
                                           referrerPolicy="no-referrer"
+                                          style={{ background: '#ffffff', borderRadius: 4, border: '1px solid #f0f0f0', padding: 2 }}
                                         />
                                       ) : (
                                         <div style={{ width: 24, height: 24, background: '#e6f7ff', color: '#1890ff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontSize: 10, fontWeight: 'bold' }}>
@@ -405,11 +412,14 @@ export default function HomepageConfigManager() {
                                   desc: (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
                                       {c.categoryImageUrl ? (
-                                        <img 
-                                          src={c.categoryImageUrl} 
-                                          alt={c.categoryName} 
-                                          style={{ width: 24, height: 24, objectFit: 'cover', borderRadius: 4, border: '1px solid #f0f0f0' }} 
+                                        <LazyImage
+                                          src={c.categoryImageUrl}
+                                          alt={c.categoryName}
+                                          width={24}
+                                          height={24}
+                                          objectFit="cover"
                                           referrerPolicy="no-referrer"
+                                          style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}
                                         />
                                       ) : (
                                         <div style={{ width: 24, height: 24, background: '#f9f0ff', color: '#722ed1', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontSize: 10, fontWeight: 'bold' }}>
@@ -428,11 +438,14 @@ export default function HomepageConfigManager() {
                                   desc: (
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '4px 0' }}>
                                       {p.productImagesUrl?.[0] ? (
-                                        <img
+                                        <LazyImage
                                           src={p.productImagesUrl[0]}
                                           alt={p.productName}
-                                          style={{ width: 32, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid #f0f0f0' }}
+                                          width={32}
+                                          height={32}
+                                          objectFit="cover"
                                           referrerPolicy="no-referrer"
+                                          style={{ borderRadius: 4, border: '1px solid #f0f0f0' }}
                                         />
                                       ) : (
                                         <div style={{ width: 32, height: 32, background: '#f6ffed', color: '#52c41a', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 4, fontSize: 10, fontWeight: 'bold' }}>

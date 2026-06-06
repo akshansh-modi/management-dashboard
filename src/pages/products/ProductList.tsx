@@ -6,10 +6,10 @@ import {
   Tag,
   Space,
   Input,
-  Avatar,
   Popconfirm,
   Tooltip,
   App,
+  Tabs,
 } from 'antd';
 import {
   PlusOutlined,
@@ -19,6 +19,7 @@ import {
   SearchOutlined,
   ShoppingOutlined,
 } from '@ant-design/icons';
+import LazyImage from '../../components/LazyImage';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -39,6 +40,7 @@ export default function ProductList() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'published' | 'drafts'>('published');
 
   // Debounce the search box, then query the server (keeps pagination correct).
   useEffect(() => {
@@ -52,10 +54,11 @@ export default function ProductList() {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
+      const isActiveFilter = activeTab === 'published';
       const res =
         isAdmin || !userId
-          ? await productService.listAll(page, pageSize, debouncedSearch || undefined, true) // admin sees disabled too
-          : await productService.listBySeller(userId, page, pageSize, debouncedSearch || undefined);
+          ? await productService.listAll(page, pageSize, debouncedSearch || undefined, true, isActiveFilter)
+          : await productService.listBySeller(userId, page, pageSize, debouncedSearch || undefined, isActiveFilter);
       setProducts(res.content);
       setTotal(res.totalElements);
     } catch (e) {
@@ -64,7 +67,7 @@ export default function ProductList() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, userId, page, pageSize, debouncedSearch, message]);
+  }, [isAdmin, userId, page, pageSize, debouncedSearch, activeTab, message]);
 
   useEffect(() => {
     fetchProducts();
@@ -101,12 +104,14 @@ export default function ProductList() {
       key: 'productName',
       render: (_, p) => (
         <Space>
-          <Avatar
-            shape="square"
-            size={44}
+          <LazyImage
             src={p.productImagesUrl?.[0]}
-            icon={<ShoppingOutlined />}
-            style={{ background: '#F0F2F5', color: '#9CA3AF' }}
+            alt={p.productName}
+            width={44}
+            height={44}
+            shape="square"
+            fallbackIcon={<ShoppingOutlined />}
+            objectFit="cover"
           />
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <Text strong style={{ fontSize: 14 }}>{p.productName}</Text>
@@ -158,7 +163,7 @@ export default function ProductList() {
       dataIndex: 'isActive',
       key: 'isActive',
       render: (active?: boolean) =>
-        active === false ? <Tag color="default">Inactive</Tag> : <Tag color="green">Active</Tag>,
+        active === false ? <Tag color="gold">Draft</Tag> : <Tag color="green">Active</Tag>,
     },
     {
       title: 'Actions',
@@ -210,6 +215,18 @@ export default function ProductList() {
       </div>
 
       <div className="chart-card" style={{ padding: 16 }}>
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => {
+            setActiveTab(key as 'published' | 'drafts');
+            setPage(0);
+          }}
+          items={[
+            { key: 'published', label: 'Published Products' },
+            { key: 'drafts', label: 'Draft Products' },
+          ]}
+          style={{ marginBottom: 16 }}
+        />
         <Input
           allowClear
           prefix={<SearchOutlined style={{ color: '#9CA3AF' }} />}

@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { UploadProps, UploadFile } from 'antd/es/upload/interface';
 import { carouselService } from '../../services/carouselService';
 import { uploadService } from '../../services/uploadService';
+import LazyImage from '../../components/LazyImage';
 import type { Carousel } from '../../types';
 
 const { Title, Text } = Typography;
@@ -121,7 +122,7 @@ export default function CarouselManager() {
       title: 'Image',
       dataIndex: 'imageUrl',
       key: 'imageUrl',
-      render: (url) => url ? <img src={url} alt="Banner" style={{ height: 40, objectFit: 'contain' }} /> : '-',
+      render: (url) => url ? <LazyImage src={url} alt="Banner" width={60} height={40} objectFit="contain" /> : '-',
     },
     {
       title: 'Title',

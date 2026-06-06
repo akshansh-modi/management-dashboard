@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Upload, Typography, Image, Space } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Upload, Typography, Space } from 'antd';
 import { PlusOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { brandService } from '../../services/brandService';
 import { uploadService } from '../../services/uploadService';
+import LazyImage from '../../components/LazyImage';
 import type { Brand } from '../../types';
 
 const { Title, Text } = Typography;
@@ -121,7 +122,7 @@ export default function BrandManager() {
       title: 'Logo',
       dataIndex: 'brandLogoUrl',
       key: 'brandLogoUrl',
-      render: (url) => url ? <Image src={url} width={40} height={40} style={{ objectFit: 'contain' }} /> : '-',
+      render: (url) => url ? <LazyImage src={url} alt="Brand logo" width={40} height={40} objectFit="contain" preview /> : '-',
     },
     {
       title: 'Brand Name',

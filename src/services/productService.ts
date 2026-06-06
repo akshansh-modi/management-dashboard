@@ -8,17 +8,28 @@ import type { Page, Product, Brand, Category, DiscountPolicy } from '../types';
 export const productService = {
   /** Admin: list all products (paginated, optional search). Pass includeInactive
    *  to also see disabled products (the dashboard needs this to re-enable them). */
-  listAll: async (page = 0, size = 10, search?: string, includeInactive = false): Promise<Page<Product>> => {
+  listAll: async (page = 0, size = 10, search?: string, includeInactive = false, active?: boolean): Promise<Page<Product>> => {
     const { data } = await api.get<Page<Product>>('/products/all', {
-      params: { page, size, ...(search ? { search } : {}), ...(includeInactive ? { includeInactive: true } : {}) },
+      params: { 
+        page, 
+        size, 
+        ...(search ? { search } : {}), 
+        ...(includeInactive ? { includeInactive: true } : {}),
+        ...(active !== undefined ? { active } : {})
+      },
     });
     return data;
   },
 
   /** Seller: list only this seller's products (paginated, optional server-side search). */
-  listBySeller: async (sellerId: string, page = 0, size = 10, search?: string): Promise<Page<Product>> => {
+  listBySeller: async (sellerId: string, page = 0, size = 10, search?: string, active?: boolean): Promise<Page<Product>> => {
     const { data } = await api.get<Page<Product>>(`/products/seller/${sellerId}`, {
-      params: { page, size, ...(search ? { search } : {}) },
+      params: { 
+        page, 
+        size, 
+        ...(search ? { search } : {}),
+        ...(active !== undefined ? { active } : {})
+      },
     });
     return data;
   },

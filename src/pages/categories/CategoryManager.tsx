@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Tree, Button, Modal, Form, Input, message, Upload, Typography, Image, Card, Space } from 'antd';
+import { Tree, Button, Modal, Form, Input, message, Upload, Typography, Card, Space } from 'antd';
 import { PlusOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { categoryService } from '../../services/categoryService';
 import { uploadService } from '../../services/uploadService';
+import LazyImage from '../../components/LazyImage';
 import type { Category } from '../../types';
 
 const { Title, Text } = Typography;
@@ -117,7 +118,7 @@ export default function CategoryManager() {
       title: (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingRight: 24 }}>
           <Space>
-            {cat.categoryImageUrl && <Image src={cat.categoryImageUrl} width={24} height={24} style={{ objectFit: 'contain' }} />}
+            {cat.categoryImageUrl && <LazyImage src={cat.categoryImageUrl} alt={cat.categoryName} width={24} height={24} objectFit="contain" />}
             <Text strong>{cat.categoryName}</Text>
           </Space>
           <Space>
