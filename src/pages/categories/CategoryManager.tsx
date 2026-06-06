@@ -181,15 +181,45 @@ export default function CategoryManager() {
     }
   };
 
-  const handleDeleteFilter = async (id: string) => {
-    try {
-      await filterService.delete(id);
-      message.success('Filter deleted successfully');
-      if (filterDrawerCategoryId) {
+  const handleDeleteFilter = async (filter: FilterAttribute) => {
+    if (!filterDrawerCategoryId || !filter.mongoId) return;
+    
+    if (filter.categoryIds.length > 1) {
+      Modal.confirm({
+        title: 'Delete shared filter?',
+        content: `This filter is shared across ${filter.categoryIds.length} categories. Do you want to remove it from this category only, or delete it everywhere?`,
+        okText: 'Remove from this category',
+        cancelText: 'Delete from all',
+        onOk: async () => {
+          try {
+            await filterService.update(filter.mongoId!, {
+              ...filter,
+              categoryIds: filter.categoryIds.filter(id => id !== filterDrawerCategoryId)
+            });
+            message.success('Removed filter from this category');
+            fetchFiltersForCategory(filterDrawerCategoryId);
+          } catch (e: any) {
+            message.error(e?.response?.data?.message || 'Failed to remove filter');
+          }
+        },
+        onCancel: async () => {
+          try {
+            await filterService.delete(filter.mongoId!);
+            message.success('Filter deleted completely');
+            fetchFiltersForCategory(filterDrawerCategoryId);
+          } catch (e: any) {
+            message.error(e?.response?.data?.message || 'Failed to delete filter');
+          }
+        }
+      });
+    } else {
+      try {
+        await filterService.delete(filter.mongoId);
+        message.success('Filter deleted successfully');
         fetchFiltersForCategory(filterDrawerCategoryId);
+      } catch (e: any) {
+        message.error(e?.response?.data?.message || 'Failed to delete filter');
       }
-    } catch (e: any) {
-      message.error(e?.response?.data?.message || 'Failed to delete filter');
     }
   };
 
@@ -251,7 +281,7 @@ export default function CategoryManager() {
           <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openFilterForm(record)} />
           <Popconfirm
             title="Delete this filter?"
-            onConfirm={() => handleDeleteFilter(record.mongoId!)}
+            onConfirm={() => handleDeleteFilter(record)}
             okText="Yes"
             cancelText="No"
           >
