@@ -8,12 +8,14 @@ import {
   Input,
   Avatar,
   Popconfirm,
+  Tooltip,
   App,
 } from 'antd';
 import {
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined,
+  StopOutlined,
+  CheckCircleOutlined,
   SearchOutlined,
   ShoppingOutlined,
 } from '@ant-design/icons';
@@ -68,14 +70,27 @@ export default function ProductList() {
     fetchProducts();
   }, [fetchProducts]);
 
-  const handleDelete = async (product: Product) => {
+  // "Delete" is a soft-delete: the backend just disables the product (hidden from
+  // the catalog, order history preserved). It can be re-enabled below.
+  const handleDisable = async (product: Product) => {
     try {
       await productService.remove(product.productId);
-      message.success(`Deleted "${product.productName}"`);
+      message.success(`Disabled "${product.productName}"`);
       fetchProducts();
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
-      message.error(err?.response?.data?.message || err?.message || 'Delete failed');
+      message.error(err?.response?.data?.message || err?.message || 'Could not disable product');
+    }
+  };
+
+  const handleEnable = async (product: Product) => {
+    try {
+      await productService.setActive(product, true);
+      message.success(`Enabled "${product.productName}"`);
+      fetchProducts();
+    } catch (e) {
+      const err = e as { response?: { data?: { message?: string } }; message?: string };
+      message.error(err?.response?.data?.message || err?.message || 'Could not enable product');
     }
   };
 
@@ -156,15 +171,23 @@ export default function ProductList() {
             icon={<EditOutlined />}
             onClick={() => navigate(`/products/${p.productId}`)}
           />
-          <Popconfirm
-            title="Delete this product?"
-            description="This cannot be undone."
-            okText="Delete"
-            okButtonProps={{ danger: true }}
-            onConfirm={() => handleDelete(p)}
-          >
-            <Button type="text" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
+          {p.isActive === false ? (
+            <Tooltip title="Enable — show in catalog again">
+              <Button type="text" style={{ color: '#52C41A' }} icon={<CheckCircleOutlined />} onClick={() => handleEnable(p)} />
+            </Tooltip>
+          ) : (
+            <Popconfirm
+              title="Disable this product?"
+              description="It will be hidden from the catalog and can't be ordered. You can re-enable it anytime — it is not deleted."
+              okText="Disable"
+              okButtonProps={{ danger: true }}
+              onConfirm={() => handleDisable(p)}
+            >
+              <Tooltip title="Disable (soft delete)">
+                <Button type="text" danger icon={<StopOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
