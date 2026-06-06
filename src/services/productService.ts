@@ -6,10 +6,11 @@ import type { Page, Product, Brand, Category, DiscountPolicy } from '../types';
  * their own via the seller-specific list endpoint.
  */
 export const productService = {
-  /** Admin: list all products (paginated, optional server-side search). */
-  listAll: async (page = 0, size = 10, search?: string): Promise<Page<Product>> => {
+  /** Admin: list all products (paginated, optional search). Pass includeInactive
+   *  to also see disabled products (the dashboard needs this to re-enable them). */
+  listAll: async (page = 0, size = 10, search?: string, includeInactive = false): Promise<Page<Product>> => {
     const { data } = await api.get<Page<Product>>('/products/all', {
-      params: { page, size, ...(search ? { search } : {}) },
+      params: { page, size, ...(search ? { search } : {}), ...(includeInactive ? { includeInactive: true } : {}) },
     });
     return data;
   },

@@ -54,7 +54,7 @@ export default function ProductList() {
     try {
       const res =
         isAdmin || !userId
-          ? await productService.listAll(page, pageSize, debouncedSearch || undefined)
+          ? await productService.listAll(page, pageSize, debouncedSearch || undefined, true) // admin sees disabled too
           : await productService.listBySeller(userId, page, pageSize, debouncedSearch || undefined);
       setProducts(res.content);
       setTotal(res.totalElements);
