@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Tree, Button, Modal, Form, Input, message, Upload, Typography, Card, Space } from 'antd';
-import { PlusOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
+import { Tree, Button, Modal, Form, Input, message, Upload, Typography, Card, Space, Drawer, Table, Tag, Tooltip, Select, Switch, InputNumber, Popconfirm } from 'antd';
+import { PlusOutlined, EditOutlined, UploadOutlined, FilterOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { categoryService } from '../../services/categoryService';
 import { uploadService } from '../../services/uploadService';
+import { filterService } from '../../services/filterService';
 import LazyImage from '../../components/LazyImage';
-import type { Category } from '../../types';
+import type { Category, FilterAttribute, FilterConfig } from '../../types';
 
 const { Title, Text } = Typography;
 
@@ -20,6 +21,16 @@ export default function CategoryManager() {
   const [form] = Form.useForm();
   const [uploading, setUploading] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+
+  // Filter Drawer State
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [filterDrawerCategoryId, setFilterDrawerCategoryId] = useState<string | null>(null);
+  const [directFilters, setDirectFilters] = useState<FilterAttribute[]>([]);
+  const [inheritedFilters, setInheritedFilters] = useState<FilterConfig[]>([]);
+  const [filterFormVisible, setFilterFormVisible] = useState(false);
+  const [editingFilter, setEditingFilter] = useState<FilterAttribute | null>(null);
+  const [filterForm] = Form.useForm();
+  const [filtersLoading, setFiltersLoading] = useState(false);
 
   const fetchCategories = async () => {
     setLoading(true);
@@ -112,6 +123,145 @@ export default function CategoryManager() {
     listType: 'picture',
   };
 
+  // Filter Management Logic
+  const openFilterDrawer = async (categoryId: string) => {
+    setFilterDrawerCategoryId(categoryId);
+    setFilterDrawerOpen(true);
+    fetchFiltersForCategory(categoryId);
+  };
+
+  const fetchFiltersForCategory = async (categoryId: string) => {
+    setFiltersLoading(true);
+    try {
+      const [resolved, allFilters] = await Promise.all([
+        filterService.getForCategory(categoryId),
+        filterService.getAll(),
+      ]);
+
+      const direct = allFilters.filter(f => f.categoryIds.includes(categoryId));
+      const directIds = new Set(direct.map(f => f.attributeId));
+
+      const inherited = resolved.filter(f => !directIds.has(f.id));
+
+      setDirectFilters(direct);
+      setInheritedFilters(inherited);
+    } catch (err) {
+      message.error('Failed to load filters');
+    } finally {
+      setFiltersLoading(false);
+    }
+  };
+
+  const closeFilterDrawer = () => {
+    setFilterDrawerOpen(false);
+    setFilterDrawerCategoryId(null);
+    setFilterFormVisible(false);
+    setEditingFilter(null);
+    filterForm.resetFields();
+  };
+
+  const handleFilterSave = async (values: any) => {
+    if (!filterDrawerCategoryId) return;
+    setFiltersLoading(true);
+    try {
+      if (editingFilter?.mongoId) {
+        await filterService.update(editingFilter.mongoId, values);
+        message.success('Filter updated successfully');
+      } else {
+        await filterService.create(values);
+        message.success('Filter created successfully');
+      }
+      setFilterFormVisible(false);
+      setEditingFilter(null);
+      filterForm.resetFields();
+      await fetchFiltersForCategory(filterDrawerCategoryId);
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || e?.message || 'Failed to save filter');
+      setFiltersLoading(false);
+    }
+  };
+
+  const handleDeleteFilter = async (id: string) => {
+    try {
+      await filterService.delete(id);
+      message.success('Filter deleted successfully');
+      if (filterDrawerCategoryId) {
+        fetchFiltersForCategory(filterDrawerCategoryId);
+      }
+    } catch (e: any) {
+      message.error(e?.response?.data?.message || 'Failed to delete filter');
+    }
+  };
+
+  const openFilterForm = (filter?: FilterAttribute) => {
+    setEditingFilter(filter || null);
+    if (filter) {
+      filterForm.setFieldsValue(filter);
+    } else {
+      filterForm.resetFields();
+      filterForm.setFieldsValue({
+        categoryIds: [filterDrawerCategoryId],
+        type: 'single-select',
+        displayOrder: 0,
+        includeSubcategories: false,
+      });
+    }
+    setFilterFormVisible(true);
+  };
+
+  const flattenCategoriesForSelect = (cats: Category[]): { label: string; value: string }[] => {
+    let result: { label: string; value: string }[] = [];
+    cats.forEach(cat => {
+      if (cat.categoryId) {
+        result.push({ label: cat.categoryName, value: cat.categoryId });
+      }
+      if (cat.subCategories) {
+        result = result.concat(flattenCategoriesForSelect(cat.subCategories));
+      }
+    });
+    return result;
+  };
+
+  const flatCategories = flattenCategoriesForSelect(categories);
+
+  const inheritedColumns = [
+    { title: 'Label', dataIndex: 'label', key: 'label' },
+    { title: 'Attribute ID', dataIndex: 'id', key: 'id' },
+    { title: 'Type', dataIndex: 'type', key: 'type' },
+    {
+      title: 'Inherited',
+      key: 'inherited',
+      render: () => (
+        <Tooltip title="Defined on an ancestor category with includeSubcategories = true">
+          <Tag color="default">inherited</Tag>
+        </Tooltip>
+      ),
+    },
+  ];
+
+  const directColumns = [
+    { title: 'Label', dataIndex: 'label', key: 'label' },
+    { title: 'Attribute ID', dataIndex: 'attributeId', key: 'attributeId' },
+    { title: 'Type', dataIndex: 'type', key: 'type' },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_: any, record: FilterAttribute) => (
+        <Space>
+          <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openFilterForm(record)} />
+          <Popconfirm
+            title="Delete this filter?"
+            onConfirm={() => handleDeleteFilter(record.mongoId!)}
+            okText="Yes"
+            cancelText="No"
+          >
+            <Button size="small" type="text" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+        </Space>
+      ),
+    },
+  ];
+
   // Convert nested categories into Ant Design Tree nodes
   const mapCategoriesToTreeNodes = (cats: Category[]): any[] => {
     return cats.map((cat) => ({
@@ -122,6 +272,9 @@ export default function CategoryManager() {
             <Text strong>{cat.categoryName}</Text>
           </Space>
           <Space>
+            <Button size="small" type="text" icon={<FilterOutlined />} onClick={(e) => { e.stopPropagation(); openFilterDrawer(cat.categoryId!); }}>
+              Filters
+            </Button>
             <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); openModal(undefined, cat.categoryId); }}>
               Add Sub
             </Button>
@@ -192,6 +345,125 @@ export default function CategoryManager() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <Drawer
+        title="Category Filters"
+        width={600}
+        open={filterDrawerOpen}
+        onClose={closeFilterDrawer}
+        destroyOnClose
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Title level={5} style={{ margin: 0 }}>Inherited Filters</Title>
+            </div>
+            <Table
+              size="small"
+              columns={inheritedColumns}
+              dataSource={inheritedFilters}
+              rowKey="id"
+              pagination={false}
+              loading={filtersLoading}
+              locale={{ emptyText: 'No inherited filters' }}
+            />
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Title level={5} style={{ margin: 0 }}>Direct Filters</Title>
+              <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => openFilterForm()}>
+                Add Filter
+              </Button>
+            </div>
+            <Table
+              size="small"
+              columns={directColumns}
+              dataSource={directFilters}
+              rowKey="mongoId"
+              pagination={false}
+              loading={filtersLoading}
+              locale={{ emptyText: 'No direct filters' }}
+            />
+          </div>
+
+          {filterFormVisible && (
+            <Card title={editingFilter ? 'Edit Filter' : 'Add Filter'} size="small" style={{ background: '#FAFBFC' }}>
+              <Form form={filterForm} layout="vertical" onFinish={handleFilterSave}>
+                <Form.Item name="categoryIds" label="Categories" rules={[{ required: true, message: 'Select at least one category' }]}>
+                  <Select
+                    mode="multiple"
+                    showSearch
+                    optionFilterProp="label"
+                    options={[...flatCategories, { label: 'Default (Global)', value: 'default' }]}
+                  />
+                </Form.Item>
+                <Space style={{ display: 'flex' }} align="start">
+                  <Form.Item name="attributeId" label="Attribute ID" rules={[{ required: true, message: 'Required' }]}>
+                    <Input placeholder="e.g. horsepower" disabled={!!editingFilter} />
+                  </Form.Item>
+                  <Form.Item name="label" label="Label" rules={[{ required: true, message: 'Required' }]}>
+                    <Input placeholder="e.g. Horsepower" />
+                  </Form.Item>
+                </Space>
+                <Space style={{ display: 'flex' }} align="start">
+                  <Form.Item name="type" label="Type" rules={[{ required: true, message: 'Required' }]}>
+                    <Select options={[
+                      { label: 'Single Select', value: 'single-select' },
+                      { label: 'Multi Select', value: 'multi-select' },
+                      { label: 'Range', value: 'range' }
+                    ]} />
+                  </Form.Item>
+                  <Form.Item name="unit" label="Unit">
+                    <Input placeholder="e.g. HP" />
+                  </Form.Item>
+                  <Form.Item name="displayOrder" label="Display Order">
+                    <InputNumber min={0} />
+                  </Form.Item>
+                </Space>
+                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.type !== curr.type}>
+                  {({ getFieldValue }) => {
+                    const type = getFieldValue('type');
+                    if (type === 'range') {
+                      return (
+                        <Space style={{ display: 'flex' }} align="start">
+                          <Form.Item name="min" label="Min Value" rules={[{ required: true, message: 'Required' }]}>
+                            <InputNumber />
+                          </Form.Item>
+                          <Form.Item name="max" label="Max Value" rules={[{ required: true, message: 'Required' }]}>
+                            <InputNumber />
+                          </Form.Item>
+                        </Space>
+                      );
+                    }
+                    if (type === 'single-select' || type === 'multi-select') {
+                      return (
+                        <Form.Item name="options" label="Options" rules={[{ required: true, message: 'Required' }]}>
+                          <Select mode="tags" placeholder="Type an option and press Enter" />
+                        </Form.Item>
+                      );
+                    }
+                    return null;
+                  }}
+                </Form.Item>
+                <Form.Item name="includeSubcategories" valuePropName="checked">
+                  <Switch />
+                  <span style={{ marginLeft: 8 }}>
+                    Include Subcategories
+                    <Tooltip title="When enabled, this filter is automatically inherited by all child categories.">
+                      <span style={{ marginLeft: 4, color: '#999', cursor: 'help' }}>ⓘ</span>
+                    </Tooltip>
+                  </span>
+                </Form.Item>
+                <Space>
+                  <Button onClick={() => setFilterFormVisible(false)}>Cancel</Button>
+                  <Button type="primary" htmlType="submit" loading={filtersLoading}>Save</Button>
+                </Space>
+              </Form>
+            </Card>
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 }

@@ -342,3 +342,33 @@ export interface OrderPayments {
   stages: StagePayment[];
 }
 
+// ── Filter Management ──────────────────────────────────────────────────────
+
+/** Matches FilterAttributeResponse from the backend */
+export interface FilterAttribute {
+  mongoId?: string;
+  categoryIds: string[];
+  attributeId: string;          // e.g. "horsepower"
+  label: string;                // e.g. "Horsepower"
+  type: 'single-select' | 'multi-select' | 'range';
+  unit?: string;
+  displayOrder?: number;
+  min?: number;
+  max?: number;
+  options?: string[];
+  includeSubcategories?: boolean;
+}
+
+/** Matches CategoryFiltersResponse.FilterConfig (public GET /filters) */
+export interface FilterConfig {
+  id: string;                   // attributeId
+  label: string;
+  type: 'single-select' | 'multi-select' | 'range';
+  unit?: string;
+  displayOrder?: number;
+  min?: number;
+  max?: number;
+  options?: string[];
+  categoryIds: string[];        // needed for partition logic
+  includeSubcategories?: boolean;
+}

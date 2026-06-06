@@ -16,6 +16,8 @@ import {
   Divider,
   App,
   Upload,
+  Tag,
+  Tooltip,
 } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined, PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
 
@@ -29,9 +31,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { productService } from '../../services/productService';
 import { userService } from '../../services/userService';
-import type { Product, Brand, Category, DiscountPolicy, AdminUser } from '../../types';
+import type { Product, Brand, Category, DiscountPolicy, AdminUser, FilterConfig } from '../../types';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { uploadService } from '../../services/uploadService';
+import { filterService } from '../../services/filterService';
+import { slugify } from '../../utils/stringUtils';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -69,6 +73,27 @@ interface VariantRow {
   attributes?: Record<string, string>;
 }
 
+function SpecValueField({ name, restField, form, variantAttributes, getSpecValueControl }: any) {
+  const specKey = Form.useWatch(['technicalSpecs', name, 'key'], form);
+  const isVariant = specKey && variantAttributes.includes(specKey);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <Form.Item
+        {...restField}
+        name={[name, 'value']}
+        rules={[{ required: true, message: 'Missing specification value' }]}
+      >
+        {getSpecValueControl(specKey)}
+      </Form.Item>
+      {isVariant && (
+        <Tooltip title="This attribute is also a variant dimension — value is set per variant">
+          <Tag color="blue" style={{ width: 'fit-content', marginTop: -12, marginBottom: 12 }}>variant</Tag>
+        </Tooltip>
+      )}
+    </div>
+  );
+}
+
 export default function ProductForm() {
   const { productId } = useParams();
   const isEdit = Boolean(productId);
@@ -91,6 +116,65 @@ export default function ProductForm() {
   const [uploading, setUploading] = useState(false);
   const [manualUrl, setManualUrl] = useState('');
   const [isDraftSaving, setIsDraftSaving] = useState(false);
+  const [categoryFilters, setCategoryFilters] = useState<FilterConfig[]>([]);
+
+  const handleCategoryChange = async (categoryId: string) => {
+    form.setFieldValue('categoryId', categoryId);
+    try {
+      const filters = await filterService.getForCategory(categoryId);
+      setCategoryFilters(filters);
+      prefillSpecsFromFilters(filters);
+    } catch {
+      // non-critical — form still usable without filter prefill
+    }
+  };
+
+  const prefillSpecsFromFilters = (filters: FilterConfig[]) => {
+    const existing: Array<{ key: string; value: string }> =
+      form.getFieldValue('technicalSpecs') ?? [];
+    const existingKeys = new Set(existing.map(s => s.key));
+    const toAdd = filters
+      .filter(f => !existingKeys.has(f.id))
+      .map(f => ({ key: f.id, value: '' }));
+    if (toAdd.length > 0) {
+      form.setFieldsValue({ technicalSpecs: [...existing, ...toAdd] });
+    }
+  };
+
+  const getSpecValueControl = (specKey?: string) => {
+    if (!specKey) return <Input placeholder="Spec value" />;
+    const filter = categoryFilters.find(f => f.id === specKey);
+    if (!filter) return <Input placeholder="Spec value" />;
+
+    if (filter.type === 'single-select') {
+      return (
+        <Select
+          placeholder="Select value"
+          options={(filter.options ?? []).map(o => ({ value: o, label: o }))}
+        />
+      );
+    }
+    if (filter.type === 'multi-select') {
+      return (
+        <Select
+          mode="multiple"
+          placeholder="Select values"
+          options={(filter.options ?? []).map(o => ({ value: o, label: o }))}
+        />
+      );
+    }
+    if (filter.type === 'range') {
+      return (
+        <InputNumber
+          min={filter.min}
+          max={filter.max}
+          placeholder={filter.unit ? `Value in ${filter.unit}` : 'Numeric value'}
+          style={{ width: '100%' }}
+        />
+      );
+    }
+    return <Input />;
+  };
 
   // Load reference data (and the product itself when editing)
   useEffect(() => {
@@ -114,6 +198,12 @@ export default function ProductForm() {
         if (isEdit && productId) {
           const product = await productService.getById(productId);
           if (cancelled) return;
+
+          if (product.categoryId) {
+            const filters = await filterService.getForCategory(product.categoryId).catch(() => []);
+            if (!cancelled) setCategoryFilters(filters);
+          }
+
           form.setFieldsValue({
             productName: product.productName,
             sku: product.sku,
@@ -176,7 +266,22 @@ export default function ProductForm() {
     const { file, onSuccess, onError } = options;
     setUploading(true);
     try {
-      const url = await uploadService.uploadImage(file as File, 'products');
+      const productName = form.getFieldValue('productName');
+      const brandId = form.getFieldValue('productBrandId');
+      const brand = brands.find((b) => b.brandId === brandId);
+
+      if (!brandId || !brand || !productName?.trim()) {
+        message.error('Please select a Brand and enter the Product Name before uploading images.');
+        setUploading(false);
+        onError?.(new Error('Missing brand or product name'));
+        return;
+      }
+
+      const brandSlug = slugify(brand.brandName);
+      const productSlug = slugify(productName);
+      const folder = `brands/${brandSlug}/products/${productSlug}`;
+
+      const url = await uploadService.uploadImage(file as File, folder);
       const currentUrls = form.getFieldValue('productImagesUrl') || [];
       const newUrls = [...currentUrls, url];
       form.setFieldValue('productImagesUrl', newUrls);
@@ -409,6 +514,7 @@ export default function ProductForm() {
                   showSearch
                   optionFilterProp="label"
                   placeholder="Select category"
+                  onChange={handleCategoryChange}
                   options={categories.map((c) => ({ value: c.categoryId, label: c.categoryName }))}
                 />
               </Form.Item>
@@ -541,22 +647,20 @@ export default function ProductForm() {
                         {...restField}
                         name={[name, 'key']}
                         rules={[{ required: true, message: 'Missing specification name' }]}
-                        noStyle
                       >
                         <Input placeholder="Spec key (e.g. Pump Type)" />
                       </Form.Item>
                     </Col>
                     <Col xs={11}>
-                      <Form.Item
-                        {...restField}
-                        name={[name, 'value']}
-                        rules={[{ required: true, message: 'Missing specification value' }]}
-                        noStyle
-                      >
-                        <Input placeholder="Spec value (e.g. Centrifugal)" />
-                      </Form.Item>
+                      <SpecValueField 
+                        name={name} 
+                        restField={restField} 
+                        form={form} 
+                        variantAttributes={variantAttributes}
+                        getSpecValueControl={getSpecValueControl}
+                      />
                     </Col>
-                    <Col xs={2} style={{ textAlign: 'right' }}>
+                    <Col xs={2} style={{ textAlign: 'right', marginBottom: 24 }}>
                       <Button
                         type="text"
                         danger
@@ -647,7 +751,7 @@ export default function ProductForm() {
                         {variantAttributes.map((attrKey) => (
                           <Col xs={12} md={6} key={attrKey}>
                             <Form.Item {...restField} name={[name, 'attributes', attrKey]} label={attrKey}>
-                              <Input placeholder={attrKey} />
+                              {getSpecValueControl(attrKey)}
                             </Form.Item>
                           </Col>
                         ))}

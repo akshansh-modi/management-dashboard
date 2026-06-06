@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { brandService } from '../../services/brandService';
 import { uploadService } from '../../services/uploadService';
+import { slugify } from '../../utils/stringUtils';
 import LazyImage from '../../components/LazyImage';
 import type { Brand } from '../../types';
 
@@ -86,7 +87,15 @@ export default function BrandManager() {
     const { file, onSuccess, onError } = options;
     setUploading(true);
     try {
-      const url = await uploadService.uploadImage(file as File, 'brands');
+      const brandName = form.getFieldValue('brandName');
+      if (!brandName?.trim()) {
+        message.error('Please enter a Brand Name before uploading a logo.');
+        setUploading(false);
+        onError?.(new Error('Missing brand name'));
+        return;
+      }
+      const brandSlug = slugify(brandName);
+      const url = await uploadService.uploadImage(file as File, `brands/${brandSlug}`);
       form.setFieldValue('brandLogoUrl', url);
       setFileList([
         {
