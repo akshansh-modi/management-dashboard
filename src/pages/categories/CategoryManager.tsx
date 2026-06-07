@@ -232,6 +232,7 @@ export default function CategoryManager() {
       filterForm.setFieldsValue({
         categoryIds: [filterDrawerCategoryId],
         type: 'single-select',
+        optionSource: 'STATIC',
         displayOrder: 0,
         includeSubcategories: false,
       });
@@ -454,6 +455,26 @@ export default function CategoryManager() {
                 <Form.Item noStyle shouldUpdate={(prev, curr) => prev.type !== curr.type}>
                   {({ getFieldValue }) => {
                     const type = getFieldValue('type');
+                    // Options source only applies to select types.
+                    if (type !== 'single-select' && type !== 'multi-select') return null;
+                    return (
+                      <Form.Item
+                        name="optionSource"
+                        label="Options Source"
+                        tooltip="Static = you type the options. Subcategories = options auto-fill from this category's child categories."
+                      >
+                        <Select options={[
+                          { label: 'Static (type options below)', value: 'STATIC' },
+                          { label: 'Subcategories (auto from category tree)', value: 'SUBCATEGORIES' },
+                        ]} />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.type !== curr.type || prev.optionSource !== curr.optionSource}>
+                  {({ getFieldValue }) => {
+                    const type = getFieldValue('type');
+                    const optionSource = getFieldValue('optionSource');
                     if (type === 'range') {
                       return (
                         <Space style={{ display: 'flex' }} align="start">
@@ -466,11 +487,19 @@ export default function CategoryManager() {
                         </Space>
                       );
                     }
-                    if (type === 'single-select' || type === 'multi-select') {
+                    // Manual options only for STATIC select filters; SUBCATEGORIES auto-fills server-side.
+                    if ((type === 'single-select' || type === 'multi-select') && optionSource !== 'SUBCATEGORIES') {
                       return (
                         <Form.Item name="options" label="Options" rules={[{ required: true, message: 'Required' }]}>
                           <Select mode="tags" placeholder="Type an option and press Enter" />
                         </Form.Item>
+                      );
+                    }
+                    if ((type === 'single-select' || type === 'multi-select') && optionSource === 'SUBCATEGORIES') {
+                      return (
+                        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+                          Options are auto-populated from this category's subcategories.
+                        </Typography.Text>
                       );
                     }
                     return null;

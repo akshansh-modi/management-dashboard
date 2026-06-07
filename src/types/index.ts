@@ -363,6 +363,7 @@ export interface FilterAttribute {
   min?: number;
   max?: number;
   options?: string[];
+  optionSource?: 'STATIC' | 'SUBCATEGORIES';
   includeSubcategories?: boolean;
 }
 
@@ -376,6 +377,7 @@ export interface FilterConfig {
   min?: number;
   max?: number;
   options?: string[];
+  optionSource?: 'STATIC' | 'SUBCATEGORIES';
   categoryIds: string[];        // needed for partition logic
   includeSubcategories?: boolean;
 }
