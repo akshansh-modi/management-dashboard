@@ -371,11 +371,15 @@ export default function ProductForm() {
       };
       if (isAdmin && values.sellerId) payload.sellerId = values.sellerId;
 
-      // Product Specs (Attributes)
+      // Product Specs (Attributes). Spec values may be numbers (e.g. an InputNumber
+      // control for a numeric filter), so coerce to string before trimming.
       const attributesRecord: Record<string, string> = {};
       (values.technicalSpecs ?? []).forEach((spec) => {
-        if (spec.key?.trim() && spec.value?.trim()) {
-          attributesRecord[spec.key.trim()] = spec.value.trim();
+        if (!spec) return;
+        const key = spec.key != null ? String(spec.key).trim() : '';
+        const value = spec.value != null ? String(spec.value).trim() : '';
+        if (key && value) {
+          attributesRecord[key] = value;
         }
       });
       payload.attributes = attributesRecord;
