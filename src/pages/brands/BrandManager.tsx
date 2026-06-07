@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Upload, Typography, Space } from 'antd';
-import { PlusOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, message, Upload, Typography, Space, TreeSelect, Tag, Popconfirm, Row, Col } from 'antd';
+import { PlusOutlined, EditOutlined, UploadOutlined, StopOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import { brandService } from '../../services/brandService';
+import { categoryService } from '../../services/categoryService';
 import { uploadService } from '../../services/uploadService';
 import { slugify } from '../../utils/stringUtils';
 import LazyImage from '../../components/LazyImage';
-import type { Brand } from '../../types';
+import type { Brand, Category } from '../../types';
 
 const { Title, Text } = Typography;
 
@@ -17,9 +18,11 @@ export default function BrandManager() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [form] = Form.useForm();
-  
+
   const [uploading, setUploading] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [bannerFileList, setBannerFileList] = useState<UploadFile[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
   const fetchBrands = async () => {
     setLoading(true);
@@ -33,8 +36,18 @@ export default function BrandManager() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const data = await categoryService.getTree();
+      setCategories(data);
+    } catch (err) {
+      message.error('Failed to load categories');
+    }
+  };
+
   useEffect(() => {
     fetchBrands();
+    fetchCategories();
   }, []);
 
   const openModal = (brand?: Brand) => {
@@ -53,9 +66,22 @@ export default function BrandManager() {
       } else {
         setFileList([]);
       }
+      if (brand.brandImageUrl) {
+        setBannerFileList([
+          {
+            uid: '-2',
+            name: 'banner.png',
+            status: 'done',
+            url: brand.brandImageUrl,
+          },
+        ]);
+      } else {
+        setBannerFileList([]);
+      }
     } else {
       form.resetFields();
       setFileList([]);
+      setBannerFileList([]);
     }
     setIsModalVisible(true);
   };
@@ -64,6 +90,7 @@ export default function BrandManager() {
     setIsModalVisible(false);
     form.resetFields();
     setFileList([]);
+    setBannerFileList([]);
     setEditingBrand(null);
   };
 
@@ -126,6 +153,65 @@ export default function BrandManager() {
     listType: 'picture',
   };
 
+  const handleBannerUpload: UploadProps['customRequest'] = async (options) => {
+    const { file, onSuccess, onError } = options;
+    setUploading(true);
+    try {
+      const brandName = form.getFieldValue('brandName');
+      if (!brandName?.trim()) {
+        message.error('Please enter a Brand Name before uploading a banner.');
+        setUploading(false);
+        onError?.(new Error('Missing brand name'));
+        return;
+      }
+      const brandSlug = slugify(brandName);
+      const url = await uploadService.uploadImage(file as File, `brands/${brandSlug}/banner`);
+      form.setFieldValue('brandImageUrl', url);
+      setBannerFileList([
+        {
+          uid: '-2',
+          name: (file as File).name,
+          status: 'done',
+          url: url,
+        },
+      ]);
+      onSuccess?.('ok');
+    } catch (err) {
+      message.error('Image upload failed');
+      onError?.(err as Error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const bannerUploadProps: UploadProps = {
+    customRequest: handleBannerUpload,
+    fileList: bannerFileList,
+    onRemove: () => {
+      setBannerFileList([]);
+      form.setFieldValue('brandImageUrl', null);
+    },
+    accept: 'image/*',
+    maxCount: 1,
+    listType: 'picture',
+  };
+
+  const handleToggleStatus = async (brand: Brand) => {
+    if (!brand.brandId) return;
+    try {
+      if (brand.isActive) {
+        await brandService.disable(brand.brandId);
+        message.success('Brand disabled');
+      } else {
+        await brandService.enable(brand.brandId);
+        message.success('Brand enabled');
+      }
+      fetchBrands();
+    } catch (err) {
+      message.error('Failed to update brand status');
+    }
+  };
+
   const columns: ColumnsType<Brand> = [
     {
       title: 'Logo',
@@ -151,6 +237,15 @@ export default function BrandManager() {
       key: 'brandContactEmail',
     },
     {
+      title: 'Status',
+      dataIndex: 'isActive',
+      key: 'isActive',
+      render: (isActive: boolean | undefined) =>
+        isActive === false
+          ? <Tag color="red">Disabled</Tag>
+          : <Tag color="green">Active</Tag>,
+    },
+    {
       title: 'Actions',
       key: 'actions',
       render: (_, record) => (
@@ -158,6 +253,19 @@ export default function BrandManager() {
           <Button type="text" icon={<EditOutlined />} onClick={() => openModal(record)}>
             Edit
           </Button>
+          <Popconfirm
+            title={record.isActive === false ? 'Enable this brand?' : 'Disable this brand?'}
+            description={record.isActive === false
+              ? 'It will become visible to buyers again.'
+              : 'It will be hidden from buyers.'}
+            okText={record.isActive === false ? 'Enable' : 'Disable'}
+            cancelText="Cancel"
+            onConfirm={() => handleToggleStatus(record)}
+          >
+            {record.isActive === false
+              ? <Button type="text" icon={<CheckCircleOutlined />}>Enable</Button>
+              : <Button type="text" danger icon={<StopOutlined />}>Disable</Button>}
+          </Popconfirm>
         </Space>
       ),
     },
@@ -210,6 +318,33 @@ export default function BrandManager() {
             <Input />
           </Form.Item>
 
+          <Form.Item label="Brand Banner" tooltip="Wide banner image shown on the buyer-facing brand page">
+            <Upload {...bannerUploadProps}>
+              <Button icon={<UploadOutlined />} loading={uploading}>
+                Upload Banner
+              </Button>
+            </Upload>
+          </Form.Item>
+          {/* Hidden field to store the banner URL from upload */}
+          <Form.Item name="brandImageUrl" hidden>
+            <Input />
+          </Form.Item>
+
+          <Form.Item name="categoryIds" label="Categories" tooltip="Assign this brand to one or more categories at any level">
+            <TreeSelect
+              treeData={categories}
+              fieldNames={{ label: 'categoryName', value: 'categoryId', children: 'subCategories' }}
+              treeCheckable
+              showCheckedStrategy={TreeSelect.SHOW_PARENT}
+              treeNodeFilterProp="categoryName"
+              allowClear
+              multiple
+              maxTagCount="responsive"
+              style={{ width: '100%' }}
+              placeholder="Assign to categories (any level)"
+            />
+          </Form.Item>
+
           <Form.Item name="brandWebsiteUrl" label="Website URL">
             <Input placeholder="https://..." />
           </Form.Item>
@@ -225,6 +360,35 @@ export default function BrandManager() {
           <Form.Item name="brandDescription" label="Description">
             <Input.TextArea rows={3} placeholder="Brief description of the brand..." />
           </Form.Item>
+
+          <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>Address</Typography.Text>
+          <Form.Item name={['brandAddress', 'addressLine']} label="Address Line">
+            <Input placeholder="Street, building, area" />
+          </Form.Item>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name={['brandAddress', 'city']} label="City">
+                <Input placeholder="City" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name={['brandAddress', 'state']} label="State">
+                <Input placeholder="State" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item name={['brandAddress', 'pincode']} label="Pincode">
+                <Input placeholder="Pincode" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name={['brandAddress', 'country']} label="Country">
+                <Input placeholder="Country" />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </div>

@@ -231,6 +231,7 @@ export interface Brand {
   brandContactPhone?: string;
   categoryIds?: string[];
   brandAddress?: Address;
+  isActive?: boolean;
 }
 
 export interface Category {
