@@ -3,6 +3,12 @@
  * These mirror the procurement-service response DTOs.
  */
 
+/** Response wrapper for bulk-create operations. */
+export interface BulkCreateResult<T> {
+  created: T[];
+  failed: Array<{ index: number; label: string; reason: string }>;
+}
+
 /** Spring Data Page envelope. */
 export interface Page<T> {
   content: T[];

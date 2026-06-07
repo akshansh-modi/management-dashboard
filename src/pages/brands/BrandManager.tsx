@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, message, Upload, Typography, Space, TreeSelect, Tag, Popconfirm, Row, Col } from 'antd';
-import { PlusOutlined, EditOutlined, UploadOutlined, StopOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, UploadOutlined, StopOutlined, CheckCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
+import { useNavigate } from 'react-router-dom';
 import { brandService } from '../../services/brandService';
 import { categoryService } from '../../services/categoryService';
 import { uploadService } from '../../services/uploadService';
@@ -13,6 +14,7 @@ import type { Brand, Category } from '../../types';
 const { Title, Text } = Typography;
 
 export default function BrandManager() {
+  const navigate = useNavigate();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -278,9 +280,17 @@ export default function BrandManager() {
           <Title level={3} style={{ margin: 0 }}>Brand Management</Title>
           <Text type="secondary">Manage product brands and logos</Text>
         </div>
-        <Button className="page-header-action" type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
-          Add Brand
-        </Button>
+        <Space>
+          <Button
+            icon={<CloudUploadOutlined />}
+            onClick={() => navigate('/bulk-upload')}
+          >
+            Bulk Upload
+          </Button>
+          <Button className="page-header-action" type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
+            Add Brand
+          </Button>
+        </Space>
       </div>
 
       <Table

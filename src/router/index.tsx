@@ -17,6 +17,7 @@ import PaymentVerification from '../pages/orders/PaymentVerification';
 import Settings from '../pages/dashboard/Settings';
 import UserManager from '../pages/users/UserManager';
 import BuyerDetail from '../pages/users/BuyerDetail';
+import BulkUploadCenter from '../pages/bulk-upload/BulkUploadCenter';
 
 /**
  * Application router with role-based route guards.
@@ -101,6 +102,10 @@ const router = createBrowserRouter([
             <PaymentVerification />
           </RoleGuard>
         ),
+      },
+      {
+        path: 'bulk-upload',
+        element: <BulkUploadCenter />,
       },
       {
         path: 'settings',

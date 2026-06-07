@@ -1,5 +1,5 @@
 import api from './api';
-import type { Brand } from '../types';
+import type { Brand, BulkCreateResult } from '../types';
 
 export const brandService = {
   getAll: async (): Promise<Brand[]> => {
@@ -10,6 +10,11 @@ export const brandService = {
 
   create: async (brand: Brand): Promise<Brand> => {
     const { data } = await api.post<Brand>('/brands/create', brand);
+    return data;
+  },
+
+  bulkCreate: async (brands: Partial<Brand>[]): Promise<BulkCreateResult<Brand>> => {
+    const { data } = await api.post<BulkCreateResult<Brand>>('/brands/bulkCreate', brands);
     return data;
   },
 

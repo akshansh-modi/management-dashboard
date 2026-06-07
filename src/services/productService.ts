@@ -1,5 +1,5 @@
 import api from './api';
-import type { Page, Product, Brand, Category, DiscountPolicy } from '../types';
+import type { Page, Product, Brand, Category, DiscountPolicy, BulkCreateResult } from '../types';
 
 /**
  * Product catalog API. Admins operate over all products; sellers are scoped to
@@ -41,6 +41,11 @@ export const productService = {
 
   create: async (product: Partial<Product>): Promise<Product> => {
     const { data } = await api.post<Product>('/products/createProduct', product);
+    return data;
+  },
+
+  bulkCreate: async (products: Partial<Product>[]): Promise<BulkCreateResult<Product>> => {
+    const { data } = await api.post<BulkCreateResult<Product>>('/products/bulkCreate', products);
     return data;
   },
 

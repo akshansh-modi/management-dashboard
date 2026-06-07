@@ -16,6 +16,7 @@ import {
   DollarOutlined,
   UserOutlined,
   HomeOutlined,
+  CloudUploadOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -83,6 +84,11 @@ export default function DashboardLayout() {
       key: '/orders',
       icon: <ShoppingCartOutlined />,
       label: 'Orders',
+    },
+    {
+      key: '/bulk-upload',
+      icon: <CloudUploadOutlined />,
+      label: 'Bulk Upload',
     },
     // Admin-only items
     ...(isAdmin

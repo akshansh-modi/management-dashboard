@@ -18,6 +18,7 @@ import {
   CheckCircleOutlined,
   SearchOutlined,
   ShoppingOutlined,
+  CloudUploadOutlined,
 } from '@ant-design/icons';
 import LazyImage from '../../components/LazyImage';
 import type { ColumnsType } from 'antd/es/table';
@@ -209,9 +210,17 @@ export default function ProductList() {
             {isAdmin ? 'Manage the full product catalog' : 'Manage your product catalog'}
           </Text>
         </div>
-        <Button className="page-header-action" type="primary" icon={<PlusOutlined />} onClick={() => navigate('/products/new')}>
-          Add Product
-        </Button>
+        <Space>
+          <Button
+            icon={<CloudUploadOutlined />}
+            onClick={() => navigate('/bulk-upload')}
+          >
+            Bulk Upload
+          </Button>
+          <Button className="page-header-action" type="primary" icon={<PlusOutlined />} onClick={() => navigate('/products/new')}>
+            Add Product
+          </Button>
+        </Space>
       </div>
 
       <div className="chart-card" style={{ padding: 16 }}>
