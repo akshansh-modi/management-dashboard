@@ -476,14 +476,13 @@ export default function CategoryManager() {
                     return null;
                   }}
                 </Form.Item>
-                <Form.Item name="includeSubcategories" valuePropName="checked">
+                <Form.Item
+                  name="includeSubcategories"
+                  valuePropName="checked"
+                  label="Include Subcategories"
+                  tooltip="When enabled, this filter is automatically inherited by all child categories."
+                >
                   <Switch />
-                  <span style={{ marginLeft: 8 }}>
-                    Include Subcategories
-                    <Tooltip title="When enabled, this filter is automatically inherited by all child categories.">
-                      <span style={{ marginLeft: 4, color: '#999', cursor: 'help' }}>ⓘ</span>
-                    </Tooltip>
-                  </span>
                 </Form.Item>
                 <Space>
                   <Button onClick={() => setFilterFormVisible(false)}>Cancel</Button>
