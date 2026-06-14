@@ -114,6 +114,13 @@ export interface OrderItem {
   igstAmount?: number;
 }
 
+export interface StatusHistoryEntry {
+  status: string;
+  changedAt?: string;
+  changedBy?: string;
+  notes?: string;
+}
+
 export interface Order {
   orderId: string;
   userId: string;
@@ -134,6 +141,12 @@ export interface Order {
   invoiceNumber?: string;
   paymentMethod?: string;
   buyerCompanyName?: string;
+  /** Buyer phone from the frozen snapshot — for click-to-call on order detail (F10). */
+  buyerPhone?: string;
+  /** Buyer email from the frozen snapshot — for click-to-email on order detail (F10). */
+  buyerEmail?: string;
+  /** Status-history audit trail (F11). */
+  statusHistory?: StatusHistoryEntry[];
 }
 
 // ── Analytics ────────────────────────────────────────────────────────────────

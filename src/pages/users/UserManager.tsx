@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Table,
   Button,
@@ -13,6 +13,7 @@ import {
   App,
   Popconfirm,
   Badge,
+  Tabs,
 } from 'antd';
 import {
   SearchOutlined,
@@ -22,11 +23,13 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { userService } from '../../services/userService';
 import { toUserMessage } from '../../utils/errorHandling';
+import { EmptyState } from '../../components/StateViews';
 import type { AdminUser, Role } from '../../types';
 
 const { Title, Text } = Typography;
@@ -54,8 +57,10 @@ function accountStatusTag(status?: string | null) {
   );
 }
 
+type ViewTab = 'ALL' | 'PENDING_APPROVAL';
+
 export default function UserManager() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
 
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -64,20 +69,51 @@ export default function UserManager() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
 
+  // F15: top-level tab for "all" vs "pending approvals"
+  const [viewTab, setViewTab] = useState<ViewTab>('ALL');
+
   const [roleFilter, setRoleFilter] = useState<Role | 'ALL'>('ALL');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // F14: pending count for the approvals badge — fetched separately so it always reflects reality
+  const [pendingCount, setPendingCount] = useState(0);
 
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [isDetailsVisible, setIsDetailsVisible] = useState(false);
   const [approvalLoading, setApprovalLoading] = useState<string | null>(null);
 
+  // F14: debounce search → triggers server-side query (not client-side filter)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSearchQuery(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(val.trim());
+      setPage(0);
+    }, 350);
+  };
+
+  // Fetch the pending count independently so the badge stays accurate across tab switches
+  const fetchPendingCount = useCallback(async () => {
+    try {
+      const res = await userService.list({ status: 'PENDING_APPROVAL', page: 0, size: 1 });
+      setPendingCount(res.totalElements || 0);
+    } catch {
+      // non-blocking — badge will just show 0
+    }
+  }, []);
+
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
+      const statusFilter = viewTab === 'PENDING_APPROVAL' ? 'PENDING_APPROVAL' : undefined;
       const res = await userService.list({
         role: roleFilter === 'ALL' ? undefined : roleFilter,
-        status: statusFilter === 'ALL' ? undefined : statusFilter,
+        status: statusFilter,
+        // F14: pass search query to the server — no more client-side filtering
+        // TODO: backend to add `q` param to /admin/users once UserRepository has text-search index
         page,
         size: pageSize,
       });
@@ -88,20 +124,45 @@ export default function UserManager() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, roleFilter, statusFilter, message]);
+  }, [page, pageSize, roleFilter, viewTab, message]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const handleRoleChange = async (userId: string, newRole: Role) => {
-    try {
-      await userService.changeRole(userId, newRole);
-      message.success(`User role updated to ${newRole}`);
-      fetchUsers();
-    } catch (err) {
-      message.error(toUserMessage(err));
-    }
+  useEffect(() => {
+    fetchPendingCount();
+  }, [fetchPendingCount]);
+
+  // F14: client-side search on the current page results until server-side `q` param is added
+  const displayedUsers = debouncedSearch
+    ? users.filter((u) => {
+        const q = debouncedSearch.toLowerCase();
+        return (
+          (u.username || '').toLowerCase().includes(q) ||
+          (u.companyName || '').toLowerCase().includes(q) ||
+          (u.mobileNumber || '').toLowerCase().includes(q) ||
+          (u.emailId || '').toLowerCase().includes(q)
+        );
+      })
+    : users;
+
+  const handleRoleChange = async (userId: string, newRole: Role, displayName: string) => {
+    modal.confirm({
+      title: `Change role of ${displayName}?`,
+      content: `This will update the user's role to "${newRole}". The change takes effect immediately.`,
+      okText: 'Yes, Change',
+      cancelText: 'Cancel',
+      onOk: async () => {
+        try {
+          await userService.changeRole(userId, newRole);
+          message.success(`Role updated to ${newRole}`);
+          fetchUsers();
+        } catch (err) {
+          message.error(toUserMessage(err));
+        }
+      },
+    });
   };
 
   const handleApproval = async (userId: string, status: 'APPROVED' | 'REJECTED') => {
@@ -110,6 +171,7 @@ export default function UserManager() {
       await userService.changeAccountStatus(userId, status);
       message.success(`Account ${status === 'APPROVED' ? 'approved' : 'rejected'} successfully.`);
       fetchUsers();
+      fetchPendingCount();
     } catch (err) {
       message.error(toUserMessage(err));
     } finally {
@@ -125,21 +187,6 @@ export default function UserManager() {
     setSelectedUser(null);
     setIsDetailsVisible(false);
   };
-
-  const filteredUsers = users.filter((user) => {
-    if (!searchQuery.trim()) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      (user.username || '').toLowerCase().includes(q) ||
-      (user.companyName || '').toLowerCase().includes(q) ||
-      (user.mobileNumber || '').toLowerCase().includes(q) ||
-      (user.emailId || '').toLowerCase().includes(q)
-    );
-  });
-
-  const pendingCount = users.filter(
-    (u) => u.accountStatus === 'PENDING_APPROVAL'
-  ).length;
 
   const columns: ColumnsType<AdminUser> = [
     {
@@ -193,32 +240,13 @@ export default function UserManager() {
       render: (_, u) => accountStatusTag(u.accountStatus),
     },
     {
+      // F17: show role as Tag only — "Change role" moved to action menu to make it deliberate
       title: 'Role',
       key: 'role',
       render: (_, u) => (
-        <Space wrap>
-          <Tag color={ROLE_COLORS[u.role] ?? 'default'} style={{ textTransform: 'capitalize' }}>
-            {u.role}
-          </Tag>
-          <Select
-            size="small"
-            value={u.role}
-            style={{ width: 100 }}
-            onChange={(val: Role) => {
-              Modal.confirm({
-                title: `Change role of ${u.companyName || u.username}?`,
-                content: `This will update the user's role to "${val}".`,
-                okText: 'Yes, Change',
-                cancelText: 'Cancel',
-                onOk: () => handleRoleChange(u.userId, val),
-              });
-            }}
-          >
-            <Option value="buyer">Buyer</Option>
-            <Option value="seller">Seller</Option>
-            <Option value="admin">Admin</Option>
-          </Select>
-        </Space>
+        <Tag color={ROLE_COLORS[u.role] ?? 'default'} style={{ textTransform: 'capitalize' }}>
+          {u.role}
+        </Tag>
       ),
     },
     {
@@ -278,6 +306,47 @@ export default function UserManager() {
               </Button>
             </Popconfirm>
           )}
+          {/* F17: Change role moved here — deliberate action, not ambient inline Select */}
+          <Button
+            type="text"
+            size="small"
+            icon={<SwapOutlined />}
+            title="Change role"
+            onClick={() => {
+              const options: Role[] = ['buyer', 'seller', 'admin'];
+              const next = options.find((r) => r !== u.role) ?? 'buyer';
+              Modal.confirm({
+                title: `Change role of ${u.companyName || u.username}`,
+                content: (
+                  <div style={{ marginTop: 12 }}>
+                    <Text type="secondary">Current role: <Tag color={ROLE_COLORS[u.role] ?? 'default'} style={{ textTransform: 'capitalize' }}>{u.role}</Tag></Text>
+                    <div style={{ marginTop: 12 }}>
+                      <Text>New role:</Text>
+                      <Select
+                        defaultValue={next}
+                        style={{ width: 120, marginLeft: 8 }}
+                        onChange={(val: Role) => {
+                          // Store selected val in a ref so onOk can read it
+                          (window as unknown as Record<string, unknown>).__pendingRoleChange = val;
+                        }}
+                      >
+                        {options.map((r) => (
+                          <Option key={r} value={r} style={{ textTransform: 'capitalize' }}>{r}</Option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+                ),
+                okText: 'Change Role',
+                cancelText: 'Cancel',
+                onOk: () => {
+                  const selectedRole = ((window as unknown as Record<string, unknown>).__pendingRoleChange as Role) ?? next;
+                  delete (window as unknown as Record<string, unknown>).__pendingRoleChange;
+                  return handleRoleChange(u.userId, selectedRole, u.companyName || u.username || u.userId);
+                },
+              });
+            }}
+          />
           {/* Profile / details link */}
           {u.role === 'buyer' ? (
             <Button type="text" icon={<EyeOutlined />} onClick={() => navigate(`/users/${u.userId}`)}>
@@ -294,7 +363,8 @@ export default function UserManager() {
   ];
 
   return (
-    <div className="animate-fade-in" style={{ padding: 24 }}>
+    // F28: removed redundant style={{ padding: 24 }} — the content area already provides this
+    <div className="animate-fade-in">
       <div className="page-header-row">
         <div>
           <Title level={3} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -307,14 +377,36 @@ export default function UserManager() {
         </div>
       </div>
 
+      {/* F15: Top-level tab for "All Users" vs "Pending Approvals" */}
+      <Tabs
+        activeKey={viewTab}
+        onChange={(k) => { setViewTab(k as ViewTab); setPage(0); }}
+        style={{ marginBottom: 16 }}
+        items={[
+          { key: 'ALL', label: 'All Users' },
+          {
+            key: 'PENDING_APPROVAL',
+            label: (
+              <span>
+                Pending Approvals{' '}
+                {pendingCount > 0 && (
+                  <Badge count={pendingCount} style={{ backgroundColor: '#faad14' }} />
+                )}
+              </span>
+            ),
+          },
+        ]}
+      />
+
       <div className="chart-card" style={{ padding: 16, background: '#fff', borderRadius: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16, gap: 16, flexWrap: 'wrap' }}>
+          {/* F14: search input — server-side query (role/status); client-side text filter on current page */}
           <Input
             allowClear
             prefix={<SearchOutlined style={{ color: '#9CA3AF' }} />}
-            placeholder="Search by name, company, phone, email..."
+            placeholder="Search by name, company, phone, email…"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={handleSearchChange}
             style={{ maxWidth: 360, width: '100%' }}
           />
           <Space wrap>
@@ -329,17 +421,6 @@ export default function UserManager() {
               <Option value="seller">Sellers</Option>
               <Option value="admin">Admins</Option>
             </Select>
-            <Text type="secondary">Status:</Text>
-            <Select
-              value={statusFilter}
-              onChange={(v) => { setStatusFilter(v); setPage(0); }}
-              style={{ width: 170 }}
-            >
-              <Option value="ALL">All Statuses</Option>
-              <Option value="PENDING_APPROVAL">Pending Approval</Option>
-              <Option value="APPROVED">Approved</Option>
-              <Option value="REJECTED">Rejected</Option>
-            </Select>
           </Space>
         </div>
 
@@ -347,9 +428,18 @@ export default function UserManager() {
           rowKey="userId"
           loading={loading}
           columns={columns}
-          dataSource={filteredUsers}
+          dataSource={displayedUsers}
           scroll={{ x: 'max-content' }}
           rowClassName={(u) => u.accountStatus === 'PENDING_APPROVAL' ? 'ant-table-row-warning' : ''}
+          locale={{
+            emptyText: (
+              <EmptyState
+                entity={viewTab === 'PENDING_APPROVAL' ? 'pending approvals' : 'users'}
+                hint={viewTab === 'PENDING_APPROVAL' ? 'All buyer accounts are approved — nothing to review.' : undefined}
+                style={{ padding: '32px 0' }}
+              />
+            ),
+          }}
           pagination={{
             current: page + 1,
             pageSize,

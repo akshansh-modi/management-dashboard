@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Typography,
   Table,
@@ -10,6 +10,8 @@ import {
   Tooltip,
   App,
   Tabs,
+  Select,
+  Switch,
 } from 'antd';
 import {
   PlusOutlined,
@@ -19,13 +21,15 @@ import {
   SearchOutlined,
   ShoppingOutlined,
   CloudUploadOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
 import LazyImage from '../../components/LazyImage';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { productService } from '../../services/productService';
-import type { Product } from '../../types';
+import { userService } from '../../services/userService';
+import type { Product, Brand, Category } from '../../types';
 
 const { Title, Text } = Typography;
 
@@ -41,7 +45,35 @@ export default function ProductList() {
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<'published' | 'drafts'>('published');
+  const [activeTab, setActiveTab] = useState<'published' | 'inactive'>('published');
+
+  // F21: seller name lookup
+  const [sellerMap, setSellerMap] = useState<Record<string, string>>({});
+  const sellerMapFetched = useRef(false);
+
+  // F20: brand + category filter options (fetched once on mount)
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [brandFilter, setBrandFilter] = useState<string | undefined>(undefined);
+  const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
+
+  // F18: low-stock filter toggle
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const LOW_STOCK_THRESHOLD = 10;
+
+  useEffect(() => {
+    if (!isAdmin || sellerMapFetched.current) return;
+    sellerMapFetched.current = true;
+    userService.listSellers().then((sellers) => {
+      const map: Record<string, string> = {};
+      sellers.forEach((s) => { if (s.userId) map[s.userId] = s.companyName || s.username || s.userId; });
+      setSellerMap(map);
+    }).catch(() => { /* non-blocking */ });
+
+    // F20: fetch brand + category options once
+    productService.listBrands().then(setBrands).catch(() => {});
+    productService.listCategories().then(setCategories).catch(() => {});
+  }, [isAdmin]);
 
   // Debounce the search box, then query the server (keeps pagination correct).
   useEffect(() => {
@@ -73,6 +105,14 @@ export default function ProductList() {
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // F18 + F20: client-side filter on the current page
+  const displayedProducts = products.filter((p) => {
+    if (lowStockOnly && (p.stockQuantity ?? 0) > LOW_STOCK_THRESHOLD) return false;
+    if (brandFilter && p.productBrandId !== brandFilter) return false;
+    if (categoryFilter && p.categoryId !== categoryFilter) return false;
+    return true;
+  });
 
   // "Delete" is a soft-delete: the backend just disables the product (hidden from
   // the catalog, order history preserved). It can be re-enabled below.
@@ -155,7 +195,18 @@ export default function ProductList() {
             dataIndex: 'sellerId',
             key: 'sellerId',
             responsive: ['lg'],
-            render: (v?: string) => <Text type="secondary" style={{ fontSize: 12 }}>{v || '—'}</Text>,
+            // F21: show company name; raw ID on hover
+            render: (v?: string) => {
+              if (!v) return <Text type="secondary">—</Text>;
+              const name = sellerMap[v];
+              return name ? (
+                <Tooltip title={`ID: ${v}`}>
+                  <Text style={{ fontSize: 12 }}>{name}</Text>
+                </Tooltip>
+              ) : (
+                <Text type="secondary" style={{ fontSize: 12 }}>{v}</Text>
+              );
+            },
           },
         ] as ColumnsType<Product>)
       : []),
@@ -163,8 +214,9 @@ export default function ProductList() {
       title: 'Status',
       dataIndex: 'isActive',
       key: 'isActive',
+      // F19: "Draft" was misleading — these are disabled/inactive products, not unpublished drafts
       render: (active?: boolean) =>
-        active === false ? <Tag color="gold">Draft</Tag> : <Tag color="green">Active</Tag>,
+        active === false ? <Tag color="orange">Inactive</Tag> : <Tag color="green">Active</Tag>,
     },
     {
       title: 'Actions',
@@ -227,29 +279,72 @@ export default function ProductList() {
         <Tabs
           activeKey={activeTab}
           onChange={(key) => {
-            setActiveTab(key as 'published' | 'drafts');
+            setActiveTab(key as 'published' | 'inactive');
             setPage(0);
           }}
           items={[
-            { key: 'published', label: 'Published Products' },
-            { key: 'drafts', label: 'Draft Products' },
+            { key: 'published', label: 'Published / Active' },
+            { key: 'inactive', label: 'Inactive / Disabled' },
           ]}
           style={{ marginBottom: 16 }}
         />
-        <Input
-          allowClear
-          prefix={<SearchOutlined style={{ color: '#9CA3AF' }} />}
-          placeholder="Search by name or SKU"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ maxWidth: 360, marginBottom: 16 }}
-        />
+
+        {/* Search + filters toolbar */}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+          <Input
+            allowClear
+            prefix={<SearchOutlined style={{ color: '#9CA3AF' }} />}
+            placeholder="Search by name or SKU"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ maxWidth: 280, flex: '1 1 200px' }}
+          />
+
+          {/* F20: Brand filter */}
+          {brands.length > 0 && (
+            <Select
+              allowClear
+              placeholder="All Brands"
+              value={brandFilter}
+              onChange={(v) => { setBrandFilter(v); setPage(0); }}
+              style={{ minWidth: 140 }}
+              options={brands.filter((b) => b.brandId).map((b) => ({ value: b.brandId!, label: b.brandName }))}
+            />
+          )}
+
+          {/* F20: Category filter */}
+          {categories.length > 0 && (
+            <Select
+              allowClear
+              placeholder="All Categories"
+              value={categoryFilter}
+              onChange={(v) => { setCategoryFilter(v); setPage(0); }}
+              style={{ minWidth: 160 }}
+              options={categories.map((c) => ({ value: c.categoryId, label: c.categoryName }))}
+            />
+          )}
+
+          {/* F18: Low-stock toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+            <WarningOutlined style={{ color: lowStockOnly ? '#FAAD14' : '#D1D5DB' }} />
+            <span style={{ fontSize: 13, color: '#6B7280' }}>Low stock only</span>
+            <Switch
+              size="small"
+              checked={lowStockOnly}
+              onChange={(v) => { setLowStockOnly(v); setPage(0); }}
+            />
+          </div>
+        </div>
+
         <Table<Product>
           rowKey="productId"
           loading={loading}
           columns={columns}
-          dataSource={products}
+          dataSource={displayedProducts}
           scroll={{ x: 'max-content' }}
+          rowClassName={(p) =>
+            (p.stockQuantity ?? Infinity) <= LOW_STOCK_THRESHOLD ? 'low-stock-row' : ''
+          }
           pagination={{
             current: page + 1,
             pageSize,

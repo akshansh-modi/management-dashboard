@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Row, Col, Statistic, Tag, Typography, Spin, Alert, Empty } from 'antd';
+import { Row, Col, Statistic, Tag, Typography, Spin, Alert, Empty, Badge } from 'antd';
 import {
   DollarOutlined,
   ShoppingCartOutlined,
   ShoppingOutlined,
   TeamOutlined,
   ClockCircleOutlined,
+  WarningOutlined,
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -96,6 +98,7 @@ const formatINR = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
 
 export default function Dashboard() {
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +131,23 @@ export default function Dashboard() {
 
   const kpiCards = useMemo(() => {
     const k = summary?.kpis;
+    const series = summary?.revenueByMonth ?? [];
+
+    // F02: compute month-over-month revenue trend from the revenueByMonth series
+    const revTrend = (() => {
+      if (series.length < 2) return null;
+      const current = series[series.length - 1].value;
+      const prev = series[series.length - 2].value;
+      if (prev === 0) return null;
+      const pct = ((current - prev) / prev) * 100;
+      return { direction: pct >= 0 ? 'up' : 'down', pct: Math.abs(Math.round(pct)) };
+    })();
+
+    // Delivered count vs total orders for orders trend
+    const deliveredCount = (summary?.ordersByStatus ?? []).find((s) => s.status === 'DELIVERED')?.count ?? 0;
+    const totalOrders = k?.totalOrders ?? 0;
+    const pendingCount = (summary?.ordersByStatus ?? []).find((s) => s.status === 'PENDING')?.count ?? 0;
+
     const cards = [
       {
         title: isAdmin ? 'Total Revenue' : 'My Revenue',
@@ -135,6 +155,7 @@ export default function Dashboard() {
         icon: <DollarOutlined />,
         color: '#2F54EB',
         bgColor: '#EBF0FF',
+        trend: revTrend,
       },
       {
         title: isAdmin ? 'Total Orders' : 'My Orders',
@@ -142,6 +163,9 @@ export default function Dashboard() {
         icon: <ShoppingCartOutlined />,
         color: '#722ED1',
         bgColor: '#F5EDFF',
+        trend: totalOrders > 0 && deliveredCount > 0
+          ? { direction: 'up' as const, pct: Math.round((deliveredCount / totalOrders) * 100), label: 'fulfilled' }
+          : null,
       },
       {
         title: isAdmin ? 'Active Products' : 'My Products',
@@ -149,6 +173,7 @@ export default function Dashboard() {
         icon: <ShoppingOutlined />,
         color: '#52C41A',
         bgColor: '#EDFFF0',
+        trend: null,
       },
       isAdmin
         ? {
@@ -157,6 +182,7 @@ export default function Dashboard() {
             icon: <TeamOutlined />,
             color: '#FAAD14',
             bgColor: '#FFF8E6',
+            trend: null,
           }
         : {
             title: 'Pending Payments',
@@ -164,6 +190,9 @@ export default function Dashboard() {
             icon: <ClockCircleOutlined />,
             color: '#FAAD14',
             bgColor: '#FFF8E6',
+            trend: k && pendingCount > 0
+              ? { direction: 'down' as const, pct: pendingCount, label: 'pending' }
+              : null,
           },
     ];
     return cards;
@@ -231,6 +260,35 @@ export default function Dashboard() {
   const hasStatus = (summary?.ordersByStatus ?? []).some((s) => s.count > 0);
   const hasTopProducts = (summary?.topProducts ?? []).length > 0;
 
+  // F01: attention band data — derived from analytics summary already in memory
+  const attentionItems = useMemo(() => {
+    if (!summary || loading) return [];
+    const items: { label: string; count: number; path: string; icon: React.ReactNode }[] = [];
+    const pendingOrders = (summary.ordersByStatus ?? []).find((s) => s.status === 'PENDING')?.count ?? 0;
+    if (pendingOrders > 0) {
+      items.push({
+        label: 'pending payment',
+        count: pendingOrders,
+        path: '/orders',
+        icon: <ClockCircleOutlined />,
+      });
+    }
+    if (isAdmin) {
+      const k = summary.kpis;
+      // Stock 0 products surfaced via kpis — if admin, nudge them to products
+      // We use pendingPayments from kpis as a proxy for admin's pending orders queue
+      if ((k?.pendingPayments ?? 0) > 0) {
+        items.push({
+          label: 'advance payments awaiting verification',
+          count: k.pendingPayments,
+          path: '/payments',
+          icon: <DollarOutlined />,
+        });
+      }
+    }
+    return items;
+  }, [summary, loading, isAdmin]);
+
   return (
     <div className="animate-fade-in">
       <div className="page-header">
@@ -241,6 +299,28 @@ export default function Dashboard() {
           {isAdmin ? 'Platform overview and key metrics' : 'Your business performance at a glance'}
         </Text>
       </div>
+
+      {/* F01: Attention band — only shows when there's something actionable */}
+      {!loading && attentionItems.length > 0 && (
+        <div className="attention-band">
+          <span className="attention-band-title">
+            <WarningOutlined />
+            Needs attention
+          </span>
+          {attentionItems.map((item) => (
+            <button
+              key={item.path + item.label}
+              className="attention-pill"
+              onClick={() => navigate(item.path)}
+              type="button"
+            >
+              {item.icon}
+              <Badge count={item.count} style={{ backgroundColor: '#FAAD14', marginRight: 2 }} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && (
         <Alert
@@ -270,6 +350,17 @@ export default function Dashboard() {
                   value={kpi.value}
                   valueStyle={{ fontWeight: 700, fontSize: 28, color: '#1A1A2E' }}
                 />
+                {/* F02: trend pill — uses the pre-existing .kpi-trend CSS classes */}
+                {'trend' in kpi && kpi.trend && (
+                  <div
+                    className={`kpi-trend ${
+                      kpi.trend.direction === 'up' ? 'up' : 'down'
+                    }`}
+                  >
+                    {kpi.trend.direction === 'up' ? '▲' : '▼'}{' '}
+                    {'label' in kpi.trend ? `${kpi.trend.pct}% ${kpi.trend.label}` : `${kpi.trend.pct}% MoM`}
+                  </div>
+                )}
               </div>
             </Col>
           ))}

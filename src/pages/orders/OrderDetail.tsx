@@ -15,10 +15,20 @@ import {
   Input,
   Divider,
   App,
+  Breadcrumb,
+  Timeline,
+  Collapse,
+  Tooltip,
 } from 'antd';
-import { ArrowLeftOutlined } from '@ant-design/icons';
+import {
+  ArrowLeftOutlined,
+  PhoneOutlined,
+  MailOutlined,
+  UserOutlined,
+  HistoryOutlined,
+} from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useAuth } from '../../context/AuthContext';
 import { orderService } from '../../services/orderService';
@@ -41,6 +51,15 @@ const NEXT_STATUSES: Record<string, OrderStatus[]> = {
 
 const inr = (v?: number) => (v != null ? `₹${Number(v).toLocaleString('en-IN')}` : '—');
 
+const STATUS_HISTORY_COLORS: Record<string, string> = {
+  PENDING: 'orange',
+  CONFIRMED: 'blue',
+  PROCESSING: 'purple',
+  SHIPPED: 'cyan',
+  DELIVERED: 'green',
+  CANCELLED: 'red',
+};
+
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -54,6 +73,7 @@ export default function OrderDetail() {
 
   const [transition, setTransition] = useState<OrderStatus | null>(null);
   const [notes, setNotes] = useState('');
+  const [trackingNumber, setTrackingNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const fetchOrder = useCallback(async () => {
@@ -63,7 +83,7 @@ export default function OrderDetail() {
     try {
       const orderData = await orderService.getById(orderId);
       setOrder(orderData);
-      
+
       try {
         const paymentsData = await orderService.getPayments(orderId);
         setPayments(paymentsData);
@@ -86,14 +106,20 @@ export default function OrderDetail() {
     if (!order || !transition) return;
     setSubmitting(true);
     try {
+      // F12: append tracking number to notes when shipping so it lands in statusHistory
+      let finalNotes = notes || undefined;
+      if (transition === 'SHIPPED' && trackingNumber.trim()) {
+        finalNotes = [`Tracking: ${trackingNumber.trim()}`, notes].filter(Boolean).join(' | ');
+      }
       if (isAdmin) {
-        await orderService.adminUpdateStatus(order.orderId, transition, notes || undefined);
+        await orderService.adminUpdateStatus(order.orderId, transition, finalNotes);
       } else {
-        await orderService.updateStatus(order.orderId, transition, notes || undefined);
+        await orderService.updateStatus(order.orderId, transition, finalNotes);
       }
       message.success(`Order marked ${transition}`);
       setTransition(null);
       setNotes('');
+      setTrackingNumber('');
       fetchOrder();
     } catch (e) {
       const err = e as { response?: { data?: { message?: string } }; message?: string };
@@ -115,6 +141,11 @@ export default function OrderDetail() {
   if (error || !order) {
     return (
       <div className="animate-fade-in">
+        {/* F08: Breadcrumb even on error */}
+        <Breadcrumb style={{ marginBottom: 12 }} items={[
+          { title: <Link to="/orders">Orders</Link> },
+          { title: orderId ?? 'Unknown' },
+        ]} />
         <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')}>
           Back to orders
         </Button>
@@ -175,10 +206,16 @@ export default function OrderDetail() {
 
   return (
     <div className="animate-fade-in">
-      <div
-        className="page-header page-header-row"
-        style={{ alignItems: 'flex-start' }}
-      >
+      {/* F08: Breadcrumb */}
+      <Breadcrumb
+        style={{ marginBottom: 12 }}
+        items={[
+          { title: <Link to="/orders">Orders</Link> },
+          { title: order.orderId },
+        ]}
+      />
+
+      <div className="page-header page-header-row" style={{ alignItems: 'flex-start' }}>
         <div style={{ minWidth: 0 }}>
           <Space wrap style={{ marginBottom: 4 }}>
             <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/orders')} />
@@ -212,7 +249,7 @@ export default function OrderDetail() {
         </Space>
       </div>
 
-      {/* Status timeline */}
+      {/* Status timeline steps */}
       <div className="chart-card" style={{ marginBottom: 20 }}>
         {isCancelled ? (
           <Alert type="error" showIcon message="This order was cancelled" />
@@ -227,7 +264,7 @@ export default function OrderDetail() {
       <Row gutter={[20, 20]}>
         {/* Items */}
         <Col xs={24} lg={16}>
-          <div className="chart-card">
+          <div className="chart-card" style={{ marginBottom: 20 }}>
             <div className="chart-header">
               <Title level={5} style={{ margin: 0 }}>
                 Items {isSeller && !isAdmin ? '(your products)' : ''}
@@ -243,10 +280,114 @@ export default function OrderDetail() {
               scroll={{ x: 'max-content' }}
             />
           </div>
+
+          {/* F11: Status History audit trail */}
+          {order.statusHistory && order.statusHistory.length > 0 && (
+            <div className="chart-card">
+              <Collapse
+                ghost
+                defaultActiveKey={[]}
+                items={[{
+                  key: 'history',
+                  label: (
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>
+                      <HistoryOutlined style={{ marginRight: 8, color: '#6B7280' }} />
+                      Status History
+                      <Tag style={{ marginLeft: 8 }}>{order.statusHistory.length} events</Tag>
+                    </span>
+                  ),
+                  children: (
+                    <Timeline
+                      style={{ paddingTop: 12 }}
+                      items={[...order.statusHistory].reverse().map((h) => ({
+                        color: STATUS_HISTORY_COLORS[h.status] ?? 'gray',
+                        children: (
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                              <Tag color={STATUS_HISTORY_COLORS[h.status] ?? 'default'} style={{ margin: 0 }}>
+                                {h.status}
+                              </Tag>
+                              <Text type="secondary" style={{ fontSize: 12 }}>
+                                {h.changedAt ? dayjs(h.changedAt).format('DD MMM YYYY, HH:mm') : '—'}
+                              </Text>
+                            </div>
+                            {h.notes && (
+                              <Text style={{ fontSize: 13 }}>{h.notes}</Text>
+                            )}
+                            {h.changedBy && (
+                              <div>
+                                <Text type="secondary" style={{ fontSize: 11 }}>
+                                  by {h.changedBy}
+                                </Text>
+                              </div>
+                            )}
+                          </div>
+                        ),
+                      }))}
+                    />
+                  ),
+                }]}
+              />
+            </div>
+          )}
         </Col>
 
-        {/* Summary + address */}
+        {/* Right sidebar */}
         <Col xs={24} lg={8}>
+
+          {/* F10: Customer Contact Card */}
+          {(isAdmin || isSeller) && (order.buyerCompanyName || order.buyerPhone || order.buyerEmail) && (
+            <div className="chart-card" style={{ marginBottom: 20 }}>
+              <Title level={5} style={{ marginTop: 0 }}>Customer</Title>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {order.buyerCompanyName && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <UserOutlined style={{ color: '#6B7280' }} />
+                    <Text strong>{order.buyerCompanyName}</Text>
+                  </div>
+                )}
+                {order.buyerPhone ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <PhoneOutlined style={{ color: '#6B7280' }} />
+                    <a href={`tel:${order.buyerPhone}`} style={{ fontSize: 13 }}>
+                      {order.buyerPhone}
+                    </a>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <PhoneOutlined style={{ color: '#D1D5DB' }} />
+                    <Text type="secondary" style={{ fontSize: 13 }}>Phone not available</Text>
+                  </div>
+                )}
+                {order.buyerEmail ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <MailOutlined style={{ color: '#6B7280' }} />
+                    <a href={`mailto:${order.buyerEmail}`} style={{ fontSize: 13 }}>
+                      {order.buyerEmail}
+                    </a>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <MailOutlined style={{ color: '#D1D5DB' }} />
+                    <Text type="secondary" style={{ fontSize: 13 }}>Email not available</Text>
+                  </div>
+                )}
+                <Divider style={{ margin: '4px 0' }} />
+                <Tooltip title="View full user profile">
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: 'auto' }}
+                    onClick={() => navigate(`/users/${order.userId}`)}
+                  >
+                    View Profile →
+                  </Button>
+                </Tooltip>
+              </div>
+            </div>
+          )}
+
+          {/* Financial summary */}
           <div className="chart-card" style={{ marginBottom: 20 }}>
             <Title level={5} style={{ marginTop: 0 }}>
               {isSeller && !isAdmin ? 'Your portion' : 'Financial summary'}
@@ -323,6 +464,7 @@ export default function OrderDetail() {
             </div>
           )}
 
+          {/* Shipping Address */}
           <div className="chart-card">
             <Title level={5} style={{ marginTop: 0 }}>Shipping address</Title>
             {order.shippingAddress ? (
@@ -350,13 +492,30 @@ export default function OrderDetail() {
         okText="Confirm"
         okButtonProps={{ danger: transition === 'CANCELLED', loading: submitting }}
         onOk={confirmTransition}
-        onCancel={() => setTransition(null)}
+        onCancel={() => { setTransition(null); setTrackingNumber(''); }}
       >
         <Text type="secondary">
           {transition === 'CONFIRMED'
             ? 'Confirming will verify the advance payment for this order.'
             : `This will move the order to ${transition}.`}
         </Text>
+
+        {/* F12: Tracking number field — shown only for SHIPPED transition */}
+        {transition === 'SHIPPED' && (
+          <div style={{ marginTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <Text strong style={{ fontSize: 13 }}>Tracking / AWB Number</Text>
+              <Text type="secondary" style={{ fontSize: 11 }}>(optional but recommended)</Text>
+            </div>
+            <Input
+              placeholder="e.g. DTDC123456789, FedEx 7489…"
+              value={trackingNumber}
+              onChange={(e) => setTrackingNumber(e.target.value)}
+              allowClear
+            />
+          </div>
+        )}
+
         {(isAdmin || isSeller) && (
           <TextArea
             rows={3}

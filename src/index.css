@@ -93,6 +93,22 @@ body {
   overflow: hidden;
 }
 
+/* ─── Sidebar Group Labels ──────────────────────────────────────────── */
+
+.dashboard-sider .ant-menu-item-group-title {
+  color: rgba(255, 255, 255, 0.35) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  padding: 14px 16px 4px !important;
+}
+
+/* Hide group labels when sidebar is collapsed */
+.dashboard-sider.ant-layout-sider-collapsed .ant-menu-item-group-title {
+  display: none;
+}
+
 /* ─── Mobile Sidebar Overlay ───────────────────────────────────────── */
 
 .sidebar-overlay {
@@ -601,3 +617,96 @@ body {
     padding: 24px 16px;
   }
 }
+
+/* ─── Global Search ─────────────────────────────────────────────────── */
+
+.global-search-result-item:hover {
+  background: #F5F7FF !important;
+  border-radius: 6px;
+}
+
+/* Hide ⌘K hint text on narrow screens to save header space */
+@media (max-width: 640px) {
+  .search-hint-text {
+    display: none;
+  }
+}
+
+/* ─── Notification Drawer ───────────────────────────────────────────── */
+
+.notif-list-item:hover {
+  background: #FAFAFA !important;
+}
+
+/* ─── Attention Band (F01) ──────────────────────────────────────────── */
+
+.attention-band {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: linear-gradient(135deg, #FFF8E6 0%, #FFF1CC 100%);
+  border: 1px solid #FFD666;
+  border-radius: 10px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.attention-band-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #7C5800;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  white-space: nowrap;
+}
+
+.attention-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #FFD666;
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #7C5800;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+  text-decoration: none;
+}
+
+.attention-pill:hover {
+  background: #FFF1CC;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+}
+
+.attention-pill .ant-badge-count {
+  background: #FAAD14;
+  color: #fff;
+  box-shadow: none;
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+}
+
+/* ─── Product low-stock warning row ────────────────────────────────── */
+
+.ant-table-row.low-stock-row td {
+  background: #FFFBE6 !important;
+}
+
+.ant-table-row.low-stock-row:hover td {
+  background: #FFF7CC !important;
+}
+
+/* ─── Pending user table row highlight ──────────────────────────────── */
+
+.ant-table-row.ant-table-row-warning td {
+  background: #FFFBE6 !important;
+}
+
