@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Typography, Table, Tag, Tabs, Button, App, Input } from 'antd';
+import { Typography, Table, Tag, Tabs, Button, App, Input, Grid, Pagination, Spin } from 'antd';
 import { EyeOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
@@ -34,6 +34,7 @@ export default function OrderList() {
   const { isAdmin, userId } = useAuth();
   const navigate = useNavigate();
   const { message } = App.useApp();
+  const screens = Grid.useBreakpoint();
 
   // Sellers see only their own line items and their portion of each order total,
   // matching the order-detail view and the multi-seller policy.
@@ -50,8 +51,6 @@ export default function OrderList() {
   const [pageSize, setPageSize] = useState(10);
   const [total, setTotal] = useState(0);
 
-  // F09: search box — client-side filter on the current page.
-  // TODO: promote to server-side when the backend adds a `q` param to GET /admin/orders
   const [searchText, setSearchText] = useState('');
   const [displaySearch, setDisplaySearch] = useState('');
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,16 +58,8 @@ export default function OrderList() {
     const val = e.target.value;
     setDisplaySearch(val);
     if (searchDebounce.current) clearTimeout(searchDebounce.current);
-    searchDebounce.current = setTimeout(() => setSearchText(val.trim().toLowerCase()), 300);
+    searchDebounce.current = setTimeout(() => { setSearchText(val.trim()); setPage(0); }, 300);
   };
-
-  const filteredOrders = searchText
-    ? orders.filter(
-        (o) =>
-          o.orderId.toLowerCase().includes(searchText) ||
-          (o.buyerCompanyName ?? '').toLowerCase().includes(searchText)
-      )
-    : orders;
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -76,7 +67,7 @@ export default function OrderList() {
     try {
       const status = statusFilter === 'ALL' ? undefined : statusFilter;
       const res = isAdmin
-        ? await orderService.listAll({ status, page, size: pageSize })
+        ? await orderService.listAll({ status, q: searchText || undefined, page, size: pageSize })
         : await orderService.listForSeller({ status, page, size: pageSize });
       setOrders(res.content);
       setTotal(res.totalElements);
@@ -86,7 +77,7 @@ export default function OrderList() {
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, statusFilter, page, pageSize, message]);
+  }, [isAdmin, statusFilter, searchText, page, pageSize, message]);
 
   useEffect(() => {
     fetchOrders();
@@ -193,37 +184,72 @@ export default function OrderList() {
             setPage(0);
           }}
         />
-        <Table<Order>
-          rowKey="orderId"
-          loading={loading}
-          columns={columns}
-          dataSource={filteredOrders}
-          scroll={{ x: 'max-content' }}
-          locale={{
-            emptyText: (
+        {(screens.md ?? true) ? (
+          <Table<Order>
+            rowKey="orderId"
+            loading={loading}
+            columns={columns}
+            dataSource={orders}
+            scroll={{ x: 'max-content' }}
+            locale={{
+              emptyText: (
+                <EmptyState
+                  entity="orders"
+                  hint={statusFilter !== 'ALL' ? `No ${statusFilter.toLowerCase()} orders found. Try a different status filter.` : undefined}
+                  style={{ padding: '32px 0' }}
+                />
+              ),
+            }}
+            onRow={(o) => ({
+              onClick: () => navigate(`/orders/${o.orderId}`),
+              style: { cursor: 'pointer' },
+            })}
+            pagination={{
+              current: page + 1,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              showTotal: (t) => `${t} orders`,
+              onChange: (p, ps) => { setPage(p - 1); setPageSize(ps); },
+            }}
+          />
+        ) : (
+          <Spin spinning={loading}>
+            {orders.length === 0 && !loading && (
               <EmptyState
                 entity="orders"
-                hint={statusFilter !== 'ALL' ? `No ${statusFilter.toLowerCase()} orders found. Try a different status filter.` : undefined}
+                hint={statusFilter !== 'ALL' ? `No ${statusFilter.toLowerCase()} orders found.` : undefined}
                 style={{ padding: '32px 0' }}
               />
-            ),
-          }}
-          onRow={(o) => ({
-            onClick: () => navigate(`/orders/${o.orderId}`),
-            style: { cursor: 'pointer' },
-          })}
-          pagination={{
-            current: page + 1,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            showTotal: (t) => `${t} orders`,
-            onChange: (p, ps) => {
-              setPage(p - 1);
-              setPageSize(ps);
-            },
-          }}
-        />
+            )}
+            {orders.map((o) => (
+              <div
+                key={o.orderId}
+                onClick={() => navigate(`/orders/${o.orderId}`)}
+                style={{ padding: '12px 16px', marginBottom: 8, background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0', cursor: 'pointer' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <Text strong style={{ fontFamily: 'monospace', fontSize: 13 }}>{o.orderId}</Text>
+                  <Tag color={STATUS_TAG[o.status] ?? 'default'}>{o.status}</Tag>
+                </div>
+                {isAdmin && o.buyerCompanyName && (
+                  <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>{o.buyerCompanyName}</Text>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                  <Text strong>{rowTotal(o) != null ? `₹${Number(rowTotal(o)).toLocaleString('en-IN')}` : '—'}</Text>
+                  <Button type="primary" ghost icon={<EyeOutlined />} style={{ minHeight: 44 }} onClick={(e) => { e.stopPropagation(); navigate(`/orders/${o.orderId}`); }}>
+                    View
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Pagination
+              current={page + 1} pageSize={pageSize} total={total} simple
+              style={{ textAlign: 'center', marginTop: 12 }}
+              onChange={(p, ps) => { setPage(p - 1); if (ps) setPageSize(ps); }}
+            />
+          </Spin>
+        )}
       </div>
     </div>
   );

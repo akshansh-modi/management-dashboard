@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, message, Upload, Typography, Space, TreeSelect, Tag, Popconfirm, Row, Col } from 'antd';
+import { Table, Button, Modal, Form, Input, message, Upload, Typography, Space, TreeSelect, Tag, Popconfirm, Row, Col, Grid, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, UploadOutlined, StopOutlined, CheckCircleOutlined, CloudUploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
@@ -15,6 +15,7 @@ const { Title, Text } = Typography;
 
 export default function BrandManager() {
   const navigate = useNavigate();
+  const screens = Grid.useBreakpoint();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -274,7 +275,7 @@ export default function BrandManager() {
   ];
 
   return (
-    <div style={{ padding: 24 }} className="animate-fade-in">
+    <div className="animate-fade-in">
       <div className="page-header-row">
         <div>
           <Title level={3} style={{ margin: 0 }}>Brand Management</Title>
@@ -293,15 +294,52 @@ export default function BrandManager() {
         </Space>
       </div>
 
-      <Table
-        columns={columns}
-        dataSource={brands}
-        rowKey="brandId"
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-        scroll={{ x: 'max-content' }}
-        style={{ background: '#fff', borderRadius: 8, padding: 24 }}
-      />
+      {(screens.md ?? true) ? (
+        <Table
+          columns={columns}
+          dataSource={brands}
+          rowKey="brandId"
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+          scroll={{ x: 'max-content' }}
+          style={{ background: '#fff', borderRadius: 8, padding: 24 }}
+        />
+      ) : (
+        <Spin spinning={loading}>
+          {brands.length === 0 && !loading && (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: '#9CA3AF' }}>No brands found</div>
+          )}
+          {brands.map((b) => (
+            <div key={b.brandId} style={{ padding: '12px 16px', marginBottom: 8, background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                {b.brandLogoUrl
+                  ? <LazyImage src={b.brandLogoUrl} alt={b.brandName} width={40} height={40} objectFit="contain" preview />
+                  : <div style={{ width: 40, height: 40, borderRadius: 6, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#bfbfbf', fontSize: 18 }}>—</div>
+                }
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Text strong style={{ fontSize: 14, display: 'block' }}>{b.brandName}</Text>
+                  {b.brandContactEmail && <Text type="secondary" style={{ fontSize: 12 }}>{b.brandContactEmail}</Text>}
+                </div>
+                <Tag color={b.isActive === false ? 'red' : 'green'}>{b.isActive === false ? 'Disabled' : 'Active'}</Tag>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <Button size="large" type="text" icon={<EditOutlined />} onClick={() => openModal(b)}>Edit</Button>
+                <Popconfirm
+                  title={b.isActive === false ? 'Enable this brand?' : 'Disable this brand?'}
+                  description={b.isActive === false ? 'It will become visible to buyers again.' : 'It will be hidden from buyers.'}
+                  okText={b.isActive === false ? 'Enable' : 'Disable'}
+                  cancelText="Cancel"
+                  onConfirm={() => handleToggleStatus(b)}
+                >
+                  {b.isActive === false
+                    ? <Button size="large" type="text" icon={<CheckCircleOutlined />} style={{ color: '#52C41A' }}>Enable</Button>
+                    : <Button size="large" type="text" danger icon={<StopOutlined />}>Disable</Button>}
+                </Popconfirm>
+              </div>
+            </div>
+          ))}
+        </Spin>
+      )}
 
       <Modal
         title={editingBrand ? 'Edit Brand' : 'Create Brand'}

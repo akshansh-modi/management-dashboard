@@ -18,6 +18,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { orderService } from '../services/orderService';
 import { productService } from '../services/productService';
+import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
 
 const { Text } = Typography;
@@ -59,35 +60,47 @@ export default function GlobalSearch({ open, onClose }: GlobalSearchProps) {
       setSearched(true);
       const found: SearchResult[] = [];
 
-      // Search orders (by ID prefix on current page)
+      // Search orders — server-side via q param
       try {
         const ordRes = isAdmin
-          ? await orderService.listAll({ page: 0, size: 20 })
+          ? await orderService.listAll({ q: trimmed, page: 0, size: 5 })
           : await orderService.listForSeller({ page: 0, size: 20 });
         const ql = trimmed.toLowerCase();
-        ordRes.content
-          .filter(
-            (o) =>
-              o.orderId.toLowerCase().includes(ql) ||
-              (o.buyerCompanyName ?? '').toLowerCase().includes(ql)
-          )
-          .slice(0, 5)
-          .forEach((o) =>
-            found.push({
-              type: 'order',
-              id: o.orderId,
-              title: o.orderId,
-              subtitle: o.buyerCompanyName ?? undefined,
-              tag: o.status,
-              tagColor:
-                o.status === 'DELIVERED' ? 'green' :
-                o.status === 'PENDING' ? 'gold' :
-                o.status === 'CANCELLED' ? 'red' : 'blue',
-              path: `/orders/${o.orderId}`,
-            })
-          );
+        (isAdmin ? ordRes.content : ordRes.content.filter(
+          (o) => o.orderId.toLowerCase().includes(ql) || (o.buyerCompanyName ?? '').toLowerCase().includes(ql)
+        ).slice(0, 5)).forEach((o) =>
+          found.push({
+            type: 'order',
+            id: o.orderId,
+            title: o.orderId,
+            subtitle: o.buyerCompanyName ?? undefined,
+            tag: o.status,
+            tagColor: o.status === 'DELIVERED' ? 'green' : o.status === 'PENDING' ? 'gold' : o.status === 'CANCELLED' ? 'red' : 'blue',
+            path: `/orders/${o.orderId}`,
+          })
+        );
       } catch {
         /* non-blocking */
+      }
+
+      // Search users (admin only) — server-side
+      if (isAdmin) {
+        try {
+          const userRes = await userService.list({ q: trimmed, size: 5 });
+          userRes.content.forEach((u) =>
+            found.push({
+              type: 'user',
+              id: u.userId,
+              title: u.companyName || u.username,
+              subtitle: u.emailId || u.mobileNumber || undefined,
+              tag: u.role,
+              tagColor: u.role === 'admin' ? 'blue' : u.role === 'seller' ? 'green' : 'default',
+              path: u.role === 'buyer' ? `/users/${u.userId}` : `/users/${u.userId}`,
+            })
+          );
+        } catch {
+          /* non-blocking */
+        }
       }
 
       // Search products (name / SKU — server-side search param)
@@ -146,6 +159,7 @@ export default function GlobalSearch({ open, onClose }: GlobalSearchProps) {
 
   const orders = results.filter((r) => r.type === 'order');
   const products = results.filter((r) => r.type === 'product');
+  const customers = results.filter((r) => r.type === 'user');
 
   return (
     <Modal
@@ -162,7 +176,7 @@ export default function GlobalSearch({ open, onClose }: GlobalSearchProps) {
           autoFocus
           size="large"
           prefix={<SearchOutlined style={{ color: '#9CA3AF', fontSize: 16 }} />}
-          placeholder="Search orders, products… (ESC to close)"
+          placeholder="Search orders, products, customers… (ESC to close)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           bordered={false}
@@ -241,6 +255,37 @@ export default function GlobalSearch({ open, onClose }: GlobalSearchProps) {
             </div>
             <List
               dataSource={products}
+              renderItem={(r) => (
+                <List.Item
+                  key={r.id}
+                  style={{ padding: '8px 20px', cursor: 'pointer', transition: 'background 0.15s' }}
+                  className="global-search-result-item"
+                  onClick={() => handleSelect(r.path)}
+                >
+                  <List.Item.Meta
+                    avatar={typeIcon(r.type)}
+                    title={
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Text strong style={{ fontSize: 13 }}>{r.title}</Text>
+                        {r.tag && <Tag color={r.tagColor}>{r.tag}</Tag>}
+                      </div>
+                    }
+                    description={r.subtitle ? <Text type="secondary" style={{ fontSize: 12 }}>{r.subtitle}</Text> : null}
+                  />
+                </List.Item>
+              )}
+            />
+          </>
+        )}
+
+        {customers.length > 0 && (
+          <>
+            {(orders.length > 0 || products.length > 0) && <Divider style={{ margin: '4px 0' }} />}
+            <div style={{ padding: '6px 20px 2px', color: '#9CA3AF', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Customers
+            </div>
+            <List
+              dataSource={customers}
               renderItem={(r) => (
                 <List.Item
                   key={r.id}

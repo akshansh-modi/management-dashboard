@@ -19,6 +19,7 @@ import {
   Timeline,
   Collapse,
   Tooltip,
+  Grid,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -65,6 +66,8 @@ export default function OrderDetail() {
   const navigate = useNavigate();
   const { isAdmin, isSeller, userId } = useAuth();
   const { message } = App.useApp();
+
+  const screens = Grid.useBreakpoint();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [payments, setPayments] = useState<OrderPayments | null>(null);
@@ -255,6 +258,8 @@ export default function OrderDetail() {
           <Alert type="error" showIcon message="This order was cancelled" />
         ) : (
           <Steps
+            size="small"
+            direction={screens.md ?? true ? 'horizontal' : 'vertical'}
             current={currentStep < 0 ? 0 : currentStep}
             items={FLOW.map((s) => ({ title: s.charAt(0) + s.slice(1).toLowerCase() }))}
           />

@@ -318,7 +318,7 @@ export default function CategoryManager() {
   };
 
   return (
-    <div style={{ padding: 24 }} className="animate-fade-in">
+    <div className="animate-fade-in">
       <div className="page-header-row">
         <div>
           <Title level={3} style={{ margin: 0 }}>Category Hierarchy</Title>

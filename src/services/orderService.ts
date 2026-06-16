@@ -7,10 +7,10 @@ import type { Page, Order, OrderStatus, OrderPayments } from '../types';
  */
 export const orderService = {
   /** Admin: all orders, optionally filtered by status. */
-  listAll: async (params: { status?: string; page?: number; size?: number } = {}): Promise<Page<Order>> => {
-    const { status, page = 0, size = 10 } = params;
+  listAll: async (params: { status?: string; q?: string; page?: number; size?: number } = {}): Promise<Page<Order>> => {
+    const { status, q, page = 0, size = 10 } = params;
     const { data } = await api.get<Page<Order>>('/admin/orders', {
-      params: { ...(status ? { status } : {}), page, size },
+      params: { ...(status ? { status } : {}), ...(q ? { q } : {}), page, size },
     });
     return data;
   },

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Row, Col, Statistic, Tag, Typography, Spin, Alert, Empty, Badge } from 'antd';
+import { Row, Col, Statistic, Tag, Typography, Spin, Alert, Empty, Badge, Grid } from 'antd';
 import {
   DollarOutlined,
   ShoppingCartOutlined,
@@ -74,23 +74,24 @@ const barOptions = {
   },
 };
 
-const doughnutOptions = {
+const makeDoughnutOptions = (isMobile: boolean) => ({
   responsive: true,
   maintainAspectRatio: false,
-  cutout: '65%',
+  cutout: isMobile ? '55%' : '65%',
   plugins: {
     legend: {
       position: 'bottom' as const,
       labels: {
-        padding: 16,
+        padding: isMobile ? 8 : 16,
         usePointStyle: true,
-        pointStyleWidth: 10,
-        font: { size: 12 },
+        pointStyleWidth: 8,
+        font: { size: isMobile ? 10 : 12 },
         color: '#6B7280',
+        boxWidth: isMobile ? 8 : 10,
       },
     },
   },
-};
+});
 
 const formatINR = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
 
@@ -99,6 +100,7 @@ const formatINR = (n: number) => '₹' + Math.round(n).toLocaleString('en-IN');
 export default function Dashboard() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
+  const screens = Grid.useBreakpoint();
   const [summary, setSummary] = useState<AnalyticsSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -334,9 +336,9 @@ export default function Dashboard() {
 
       <Spin spinning={loading} tip="Loading analytics…">
         {/* KPI Cards */}
-        <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
+        <Row gutter={[{ xs: 12, sm: 16, md: 20 }, { xs: 12, sm: 16, md: 20 }]} style={{ marginBottom: 24 }}>
           {kpiCards.map((kpi, index) => (
-            <Col xs={24} sm={12} lg={6} key={kpi.title}>
+            <Col xs={12} sm={12} lg={6} key={kpi.title}>
               <div className={`kpi-card animate-fade-in-delay-${index + 1}`}>
                 <div className="kpi-icon" style={{ background: kpi.bgColor, color: kpi.color }}>
                   {kpi.icon}
@@ -348,7 +350,7 @@ export default function Dashboard() {
                     </Text>
                   }
                   value={kpi.value}
-                  valueStyle={{ fontWeight: 700, fontSize: 28, color: '#1A1A2E' }}
+                  valueStyle={{ fontWeight: 700, fontSize: screens.md ? 28 : 18, color: '#1A1A2E' }}
                 />
                 {/* F02: trend pill — uses the pre-existing .kpi-trend CSS classes */}
                 {'trend' in kpi && kpi.trend && (
@@ -374,9 +376,11 @@ export default function Dashboard() {
                 <Title level={5} style={{ margin: 0 }}>Revenue Overview</Title>
                 <Tag color="blue">Last 6 Months</Tag>
               </div>
-              <div style={{ height: 320 }}>
+              <div style={{ height: screens.md ? 320 : 200, position: 'relative', width: '100%' }}>
                 {hasRevenue ? (
-                  <Line data={revenueData} options={lineOptions as Parameters<typeof Line>[0]['options']} />
+                  <div style={{ position: 'absolute', inset: 0 }}>
+                    <Line data={revenueData} options={lineOptions as Parameters<typeof Line>[0]['options']} />
+                  </div>
                 ) : (
                   <Empty description="No revenue in this period" style={{ paddingTop: 90 }} />
                 )}
@@ -388,9 +392,15 @@ export default function Dashboard() {
               <div className="chart-header">
                 <Title level={5} style={{ margin: 0 }}>Orders by Status</Title>
               </div>
-              <div style={{ height: 320 }}>
+              <div style={{ height: screens.md ? 320 : 260, position: 'relative', width: '100%' }}>
                 {hasStatus ? (
-                  <Doughnut data={orderStatusData} options={doughnutOptions} />
+                  <div style={{ position: 'absolute', inset: 0 }}>
+                    <Doughnut
+                      key={screens.md ? 'md' : 'xs'}
+                      data={orderStatusData}
+                      options={makeDoughnutOptions(!(screens.md ?? true))}
+                    />
+                  </div>
                 ) : (
                   <Empty description="No orders yet" style={{ paddingTop: 90 }} />
                 )}
@@ -407,9 +417,11 @@ export default function Dashboard() {
                 <Title level={5} style={{ margin: 0 }}>Top Selling Products</Title>
                 <Tag color="green">By units sold</Tag>
               </div>
-              <div style={{ height: 300 }}>
+              <div style={{ height: screens.md ? 300 : 180, position: 'relative', width: '100%' }}>
                 {hasTopProducts ? (
-                  <Bar data={topProductsData} options={barOptions} />
+                  <div style={{ position: 'absolute', inset: 0 }}>
+                    <Bar data={topProductsData} options={barOptions} />
+                  </div>
                 ) : (
                   <Empty description="No sales data yet" style={{ paddingTop: 80 }} />
                 )}

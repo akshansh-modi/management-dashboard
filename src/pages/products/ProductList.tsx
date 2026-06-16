@@ -12,6 +12,9 @@ import {
   Tabs,
   Select,
   Switch,
+  Grid,
+  Pagination,
+  Spin,
 } from 'antd';
 import {
   PlusOutlined,
@@ -37,6 +40,7 @@ export default function ProductList() {
   const { isAdmin, userId } = useAuth();
   const navigate = useNavigate();
   const { message } = App.useApp();
+  const screens = Grid.useBreakpoint();
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -227,6 +231,7 @@ export default function ProductList() {
           <Button
             type="text"
             icon={<EditOutlined />}
+            title="Edit product"
             onClick={() => navigate(`/products/${p.productId}`)}
           />
           {p.isActive === false ? (
@@ -336,27 +341,71 @@ export default function ProductList() {
           </div>
         </div>
 
-        <Table<Product>
-          rowKey="productId"
-          loading={loading}
-          columns={columns}
-          dataSource={displayedProducts}
-          scroll={{ x: 'max-content' }}
-          rowClassName={(p) =>
-            (p.stockQuantity ?? Infinity) <= LOW_STOCK_THRESHOLD ? 'low-stock-row' : ''
-          }
-          pagination={{
-            current: page + 1,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            showTotal: (t) => `${t} products`,
-            onChange: (p, ps) => {
-              setPage(p - 1);
-              setPageSize(ps);
-            },
-          }}
-        />
+        {(screens.md ?? true) ? (
+          <Table<Product>
+            rowKey="productId"
+            loading={loading}
+            columns={columns}
+            dataSource={displayedProducts}
+            scroll={{ x: 'max-content' }}
+            rowClassName={(p) =>
+              (p.stockQuantity ?? Infinity) <= LOW_STOCK_THRESHOLD ? 'low-stock-row' : ''
+            }
+            pagination={{
+              current: page + 1,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              showTotal: (t) => `${t} products`,
+              onChange: (p, ps) => { setPage(p - 1); setPageSize(ps); },
+            }}
+          />
+        ) : (
+          <Spin spinning={loading}>
+            {displayedProducts.length === 0 && !loading && (
+              <div style={{ textAlign: 'center', padding: '32px 0', color: '#9CA3AF' }}>No products found</div>
+            )}
+            {displayedProducts.map((p) => (
+              <div
+                key={p.productId}
+                style={{
+                  padding: '12px 16px', marginBottom: 8, background: '#fff', borderRadius: 8,
+                  border: `1px solid ${(p.stockQuantity ?? Infinity) <= LOW_STOCK_THRESHOLD ? '#faad14' : '#f0f0f0'}`,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                  <div style={{ flex: 1, marginRight: 8 }}>
+                    <Text strong style={{ fontSize: 14 }}>{p.productName}</Text>
+                    {p.sku && <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>SKU: {p.sku}</Text>}
+                  </div>
+                  <Tag color={p.isActive === false ? 'orange' : 'green'}>{p.isActive === false ? 'Inactive' : 'Active'}</Tag>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                  <Text strong>{p.price != null ? `₹${Number(p.price).toLocaleString('en-IN')}` : '—'}</Text>
+                  <Space>
+                    <Button type="text" icon={<EditOutlined />} style={{ minHeight: 44 }} title="Edit product" onClick={() => navigate(`/products/${p.productId}`)} />
+                    {p.isActive === false ? (
+                      <Tooltip title="Enable — show in catalog again">
+                        <Button type="text" style={{ color: '#52C41A', minHeight: 44 }} icon={<CheckCircleOutlined />} onClick={() => handleEnable(p)} />
+                      </Tooltip>
+                    ) : (
+                      <Popconfirm title="Disable this product?" description="Hidden from catalog, can be re-enabled." okText="Disable" okButtonProps={{ danger: true }} onConfirm={() => handleDisable(p)}>
+                        <Tooltip title="Disable">
+                          <Button type="text" danger style={{ minHeight: 44 }} icon={<StopOutlined />} />
+                        </Tooltip>
+                      </Popconfirm>
+                    )}
+                  </Space>
+                </div>
+              </div>
+            ))}
+            <Pagination
+              current={page + 1} pageSize={pageSize} total={total} simple
+              style={{ textAlign: 'center', marginTop: 12 }}
+              onChange={(p, ps) => { setPage(p - 1); if (ps) setPageSize(ps); }}
+            />
+          </Spin>
+        )}
       </div>
     </div>
   );

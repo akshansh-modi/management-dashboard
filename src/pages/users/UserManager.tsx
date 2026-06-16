@@ -14,6 +14,9 @@ import {
   Popconfirm,
   Badge,
   Tabs,
+  Grid,
+  Pagination,
+  Spin,
 } from 'antd';
 import {
   SearchOutlined,
@@ -61,6 +64,7 @@ type ViewTab = 'ALL' | 'PENDING_APPROVAL';
 
 export default function UserManager() {
   const { message, modal } = App.useApp();
+  const screens = Grid.useBreakpoint();
   const navigate = useNavigate();
 
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -112,8 +116,7 @@ export default function UserManager() {
       const res = await userService.list({
         role: roleFilter === 'ALL' ? undefined : roleFilter,
         status: statusFilter,
-        // F14: pass search query to the server — no more client-side filtering
-        // TODO: backend to add `q` param to /admin/users once UserRepository has text-search index
+        q: debouncedSearch || undefined,
         page,
         size: pageSize,
       });
@@ -124,7 +127,7 @@ export default function UserManager() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, roleFilter, viewTab, message]);
+  }, [page, pageSize, roleFilter, viewTab, debouncedSearch, message]);
 
   useEffect(() => {
     fetchUsers();
@@ -133,19 +136,6 @@ export default function UserManager() {
   useEffect(() => {
     fetchPendingCount();
   }, [fetchPendingCount]);
-
-  // F14: client-side search on the current page results until server-side `q` param is added
-  const displayedUsers = debouncedSearch
-    ? users.filter((u) => {
-        const q = debouncedSearch.toLowerCase();
-        return (
-          (u.username || '').toLowerCase().includes(q) ||
-          (u.companyName || '').toLowerCase().includes(q) ||
-          (u.mobileNumber || '').toLowerCase().includes(q) ||
-          (u.emailId || '').toLowerCase().includes(q)
-        );
-      })
-    : users;
 
   const handleRoleChange = async (userId: string, newRole: Role, displayName: string) => {
     modal.confirm({
@@ -424,31 +414,83 @@ export default function UserManager() {
           </Space>
         </div>
 
-        <Table<AdminUser>
-          rowKey="userId"
-          loading={loading}
-          columns={columns}
-          dataSource={displayedUsers}
-          scroll={{ x: 'max-content' }}
-          rowClassName={(u) => u.accountStatus === 'PENDING_APPROVAL' ? 'ant-table-row-warning' : ''}
-          locale={{
-            emptyText: (
+        {(screens.md ?? true) ? (
+          <Table<AdminUser>
+            rowKey="userId"
+            loading={loading}
+            columns={columns}
+            dataSource={users}
+            scroll={{ x: 'max-content' }}
+            rowClassName={(u) => u.accountStatus === 'PENDING_APPROVAL' ? 'ant-table-row-warning' : ''}
+            locale={{
+              emptyText: (
+                <EmptyState
+                  entity={viewTab === 'PENDING_APPROVAL' ? 'pending approvals' : 'users'}
+                  hint={viewTab === 'PENDING_APPROVAL' ? 'All buyer accounts are approved — nothing to review.' : undefined}
+                  style={{ padding: '32px 0' }}
+                />
+              ),
+            }}
+            pagination={{
+              current: page + 1,
+              pageSize,
+              total,
+              showSizeChanger: true,
+              showTotal: (t) => `${t} users`,
+              onChange: (p, ps) => { setPage(p - 1); setPageSize(ps); },
+            }}
+          />
+        ) : (
+          <Spin spinning={loading}>
+            {users.length === 0 && !loading && (
               <EmptyState
                 entity={viewTab === 'PENDING_APPROVAL' ? 'pending approvals' : 'users'}
                 hint={viewTab === 'PENDING_APPROVAL' ? 'All buyer accounts are approved — nothing to review.' : undefined}
                 style={{ padding: '32px 0' }}
               />
-            ),
-          }}
-          pagination={{
-            current: page + 1,
-            pageSize,
-            total,
-            showSizeChanger: true,
-            showTotal: (t) => `${t} users`,
-            onChange: (p, ps) => { setPage(p - 1); setPageSize(ps); },
-          }}
-        />
+            )}
+            {users.map((u) => (
+              <div key={u.userId} style={{ padding: '12px 16px', marginBottom: 8, background: '#fff', borderRadius: 8, border: '1px solid #f0f0f0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                  <div>
+                    <Text strong style={{ fontSize: 14 }}>{u.companyName || u.username}</Text>
+                    {u.companyName && <Text type="secondary" style={{ fontSize: 12, display: 'block' }}>@{u.username}</Text>}
+                  </div>
+                  <Space direction="vertical" align="end" size={4}>
+                    <Tag color={ROLE_COLORS[u.role] ?? 'default'} style={{ textTransform: 'capitalize', margin: 0 }}>{u.role}</Tag>
+                    {accountStatusTag(u.accountStatus)}
+                  </Space>
+                </div>
+                <Text type="secondary" style={{ fontSize: 12 }}>{u.mobileNumber || u.emailId || '—'}</Text>
+                <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {u.role === 'buyer' && u.accountStatus === 'PENDING_APPROVAL' && (
+                    <>
+                      <Popconfirm title="Approve this account?" description="The buyer will be able to place orders immediately." onConfirm={() => handleApproval(u.userId, 'APPROVED')} okText="Approve" cancelText="Cancel">
+                        <Button type="primary" size="large" icon={<CheckCircleOutlined />} loading={approvalLoading === u.userId + 'APPROVED'}>Approve</Button>
+                      </Popconfirm>
+                      <Popconfirm title="Reject this account?" onConfirm={() => handleApproval(u.userId, 'REJECTED')} okText="Reject" cancelText="Cancel" okButtonProps={{ danger: true }}>
+                        <Button danger size="large" icon={<CloseCircleOutlined />} loading={approvalLoading === u.userId + 'REJECTED'}>Reject</Button>
+                      </Popconfirm>
+                    </>
+                  )}
+                  {u.role === 'buyer' && u.accountStatus === 'REJECTED' && (
+                    <Popconfirm title="Re-approve this account?" onConfirm={() => handleApproval(u.userId, 'APPROVED')} okText="Approve" cancelText="Cancel">
+                      <Button size="large" icon={<CheckCircleOutlined />} loading={approvalLoading === u.userId + 'APPROVED'}>Re-approve</Button>
+                    </Popconfirm>
+                  )}
+                  <Button size="large" type="text" icon={<EyeOutlined />} onClick={() => u.role === 'buyer' ? navigate(`/users/${u.userId}`) : showDetails(u)}>
+                    {u.role === 'buyer' ? 'Profile' : 'Details'}
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Pagination
+              current={page + 1} pageSize={pageSize} total={total} simple
+              style={{ textAlign: 'center', marginTop: 12 }}
+              onChange={(p, ps) => { setPage(p - 1); if (ps) setPageSize(ps); }}
+            />
+          </Spin>
+        )}
       </div>
 
       <Modal

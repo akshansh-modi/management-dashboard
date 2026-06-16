@@ -5,12 +5,13 @@ import type { Page, AdminUser, Role, BuyerAnalytics, Order } from '../types';
  * Admin user-management API. Admin-only on the backend (/admin/**).
  */
 export const userService = {
-  list: async (params: { role?: Role; status?: string; page?: number; size?: number } = {}): Promise<Page<AdminUser>> => {
-    const { role, status, page = 0, size = 20 } = params;
+  list: async (params: { role?: Role; status?: string; q?: string; page?: number; size?: number } = {}): Promise<Page<AdminUser>> => {
+    const { role, status, q, page = 0, size = 20 } = params;
     const { data } = await api.get<Page<AdminUser>>('/admin/users', {
       params: {
         ...(role ? { role } : {}),
         ...(status ? { status } : {}),
+        ...(q ? { q } : {}),
         page,
         size,
       },
