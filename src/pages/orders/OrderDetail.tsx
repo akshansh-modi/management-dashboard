@@ -41,6 +41,30 @@ const NEXT_STATUSES: Record<string, OrderStatus[]> = {
 
 const inr = (v?: number) => (v != null ? `₹${Number(v).toLocaleString('en-IN')}` : '—');
 
+// Production SKUs are opaque numbers, so the variant snapshot on each order item
+// is the only human-readable way to tell same-product variants apart. The
+// merchandised heading (e.g. "CRI GLAD 50") leads; headings the backend derived
+// from bare attribute values (e.g. "0.5") are skipped since the "Key: value"
+// pairs already say more.
+const variantLabel = (i: OrderItem) => {
+  const entries = Object.entries(i.variantAttributes ?? {}).filter(
+    ([, value]) => value != null && String(value).trim() !== '',
+  );
+  const parts = entries.map(
+    ([key, value]) =>
+      `${key
+        .replace(/[_-]+/g, ' ')
+        .replace(/([a-z\d])([A-Z])/g, '$1 $2')
+        .replace(/\b\w/g, (s) => s.toUpperCase())}: ${value}`,
+  );
+  const derived = entries.map(([, value]) => String(value).trim()).join(' / ');
+  const heading = i.variantHeading?.trim();
+  if (heading && heading.toLowerCase() !== derived.toLowerCase()) {
+    parts.unshift(heading);
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
+};
+
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -141,6 +165,11 @@ export default function OrderDetail() {
       render: (_, i) => (
         <div>
           <Text strong>{i.productName}</Text>
+          {variantLabel(i) && (
+            <Tag color="blue" style={{ marginLeft: 8, fontSize: 11 }}>
+              {variantLabel(i)}
+            </Tag>
+          )}
           <br />
           <Text type="secondary" style={{ fontSize: 12 }}>
             {i.brandName ? `${i.brandName} · ` : ''}SKU: {i.sku || '—'}

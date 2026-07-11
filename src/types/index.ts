@@ -96,6 +96,7 @@ export interface OrderItem {
   productId: string;
   variantId?: string;
   variantAttributes?: Record<string, string>;
+  variantHeading?: string; // Seller-facing variant name (e.g. "CRI GLAD 50"); absent on legacy orders
   productName: string;
   brandName?: string;
   brandId?: string;
